@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page Extractor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #0a6cbd; --accent-ink: #ffffff; --accent-soft: #e4f0fa;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --chip: #eef1f4;
+    --thumb: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #5aaef0; --accent-ink: #061a2b; --accent-soft: #15283a;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+      --thumb: #e9ecef;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #5aaef0; --accent-ink: #061a2b; --accent-soft: #15283a;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+    --thumb: #e9ecef;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 16px 64px; }
+  .home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  .step {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 700; flex: none;
+  }
+  .card.disabled { opacity: .5; pointer-events: none; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  #fileInfo { margin-top: 12px; font-size: .95rem; }
+  #fileInfo .name { font-weight: 600; word-break: break-all; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input[type=text] {
+    width: 100%; font: inherit; font-size: 1.1rem; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg:empty { display: none; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+  .seg button { background: transparent; color: var(--muted); padding: 7px 14px; border-radius: 8px; font-weight: 600; }
+  .seg button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .quick button { padding: 6px 12px; font-size: .85rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 14px; }
+  .thumbs {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 12px;
+    margin-top: 16px; max-height: 560px; overflow-y: auto; padding: 4px;
+  }
+  @media (max-width: 520px) { .thumbs { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
+  .th {
+    position: relative; border: 2px solid var(--line); border-radius: 10px; background: var(--bg);
+    padding: 6px; cursor: pointer; user-select: none; transition: border-color .1s, transform .1s;
+  }
+  .th:hover { border-color: var(--muted); }
+  .th .pg {
+    background: var(--thumb); border-radius: 4px; aspect-ratio: 210 / 297; display: grid; place-items: center;
+    overflow: hidden; color: #9aa7b4; font-size: .8rem;
+  }
+  .th canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .th .num { text-align: center; font-size: .82rem; margin-top: 4px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .th .tick {
+    position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--line); background: var(--panel); display: grid; place-items: center;
+    font-size: .75rem; font-weight: 700; color: transparent;
+  }
+  .th.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .th.sel .num { color: var(--accent); font-weight: 600; }
+  .th.sel .tick { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .th.del .pg { opacity: .35; }
+  .th.del .tick { background: var(--err); border-color: var(--err); color: #fff; }
+  .th.del { border-color: var(--err); background: var(--err-soft); }
+  .summary { font-size: .92rem; margin-top: 4px; }
+  .summary b { font-variant-numeric: tabular-nums; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.ghost { background: var(--chip); color: var(--ink); font-weight: 500; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .sub { font-size: .9rem; font-weight: 600; margin: 18px 0 8px; }
+  .sub:first-of-type { margin-top: 0; }
+  .files { margin-top: 10px; font-size: .85rem; display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { background: var(--chip); border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .8rem; }
+  #status { margin-top: 12px; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  .bar { height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  footer { margin-top: 28px; font-size: .82rem; color: var(--muted); }
+  footer ol { padding-left: 18px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>Page Extractor</h1>
+    <p>Pick the pages you want from a PDF and save them as a new PDF, or remove the ones you don't want.</p>
+    <div class="privacy">🔒 Runs entirely in your browser. Files are never uploaded.</div>
+  </header>
+
+  <section class="card" id="card1">
+    <h2><span class="step">1</span>Choose a PDF</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose PDF file">
+      <strong>Click to choose</strong> or drag the PDF here
+    </div>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div id="fileInfo"></div>
+  </section>
+
+  <section class="card disabled" id="card2">
+    <h2><span class="step">2</span>Pick pages</h2>
+    <div class="row">
+      <div class="seg" role="group" aria-label="Mode">
+        <button id="modeKeep" class="on">Keep selected pages</button>
+        <button id="modeDel">Remove selected pages</button>
+      </div>
+    </div>
+    <label for="range">Pages</label>
+    <input type="text" id="range" placeholder="e.g. 1, 3, 5-8" autocomplete="off" spellcheck="false" inputmode="text">
+    <div class="hint">Type numbers and ranges, or click the thumbnails below (Shift-click selects a run). In “Keep” mode, typed order is kept, so <b>5-8, 1</b> puts page 1 last.</div>
+    <div class="quick">
+      <button class="ghost" data-q="all">All</button>
+      <button class="ghost" data-q="none">None</button>
+      <button class="ghost" data-q="odd">Odd</button>
+      <button class="ghost" data-q="even">Even</button>
+      <button class="ghost" data-q="invert">Invert</button>
+    </div>
+    <div class="msg" id="check"></div>
+    <div class="summary" id="summary"></div>
+    <div class="thumbs" id="thumbs"></div>
+  </section>
+
+  <section class="card disabled" id="card3">
+    <h2><span class="step">3</span>Download</h2>
+    <div class="sub">One PDF</div>
+    <div class="actions"><button id="btnOne">Download PDF</button></div>
+    <div class="sub">Separate files (.zip)</div>
+    <div class="actions">
+      <button id="btnGroups" class="secondary">One PDF per range</button>
+      <button id="btnPages" class="secondary">One PDF per page</button>
+    </div>
+    <div class="hint" id="groupHint"></div>
+    <div class="files" id="files"></div>
+    <div class="bar" id="bar"><div></div></div>
+    <div id="status"></div>
+  </section>
+
+  <footer>
+    Notes:
+    <ol>
+      <li>Pages are copied as they are, so text stays selectable and quality is unchanged.</li>
+      <li>“One PDF per range” makes a file for each comma-separated part you typed, e.g. <b>1-3, 7</b> gives two files.</li>
+      <li>Password-protected PDFs need the password removed first.</li>
+    </ol>
+  </footer>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ---------- pure helpers ---------- */
+// Parse "1, 3, 5-8, 10-" into groups of 1-based page numbers. Returns {groups, error}.
+function parseRanges(text, total) {
+  const groups = [];
+  const norm = text.replace(/[–—~至到]|\bto\b/gi, '-').replace(/\s*-\s*/g, '-');
+  const parts = norm.split(/[,;，、\s]+/).map(s => s.trim()).filter(Boolean);
+  for (const raw of parts) {
+    const p = raw;
+    let m;
+    if ((m = p.match(/^(\d+)$/))) {
+      const n = +m[1];
+      if (n < 1 || n > total) return { error: `Page ${n} doesn't exist (this PDF has ${total} pages).` };
+      groups.push({ label: String(n), pages: [n] });
+    } else if ((m = p.match(/^(\d*)-(\d*)$/)) && (m[1] || m[2])) {
+      const a = m[1] ? +m[1] : 1, b = m[2] ? +m[2] : total;
+      if (a < 1 || b < 1 || a > total || b > total)
+        return { error: `“${raw}” is outside 1–${total}.` };
+      const pages = [];
+      if (a <= b) for (let i = a; i <= b; i++) pages.push(i);
+      else for (let i = a; i >= b; i--) pages.push(i);
+      groups.push({ label: a === b ? String(a) : `${a}-${b}`, pages });
+    } else {
+      return { error: `Can't read “${raw}”. Use numbers like 3 or ranges like 5-8.` };
+    }
+  }
+  return { groups };
+}
+// Compress a sorted set of page numbers into "1-3, 5, 7-9".
+function compress(nums) {
+  const s = [...new Set(nums)].sort((a, b) => a - b), out = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    out.push(j > i ? `${s[i]}-${s[j]}` : String(s[i]));
+    i = j;
+  }
+  return out.join(', ');
+}
+const cleanName = t => t.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-') || 'document';
+
+/* ---------- state & UI ---------- */
+const $ = id => document.getElementById(id);
+const state = { bytes: null, name: '', total: 0, mode: 'keep', groups: [], selected: new Set(), anchor: null, pdf: null };
+
+const drop = $('drop'), fileIn = $('file');
+drop.onclick = () => fileIn.click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); };
+fileIn.onchange = () => { if (fileIn.files[0]) load(fileIn.files[0]); fileIn.value = ''; };
+
+async function load(file) {
+  $('fileInfo').innerHTML = 'Reading…';
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    if (doc.isEncrypted) throw new Error('This PDF is password-protected. Remove the password first.');
+    state.bytes = bytes; state.name = file.name; state.total = doc.getPageCount();
+    state.selected = new Set(); state.groups = []; state.anchor = null;
+    $('fileInfo').innerHTML = `<span class="name">${esc(file.name)}</span> · ${state.total} page${state.total === 1 ? '' : 's'}`;
+    $('card2').classList.remove('disabled');
+    $('range').value = '';
+    buildThumbs();
+    update();
+    $('range').focus();
+  } catch (err) {
+    $('fileInfo').innerHTML = `<div class="msg err">${esc(err.message || 'Could not open this PDF.')}</div>`;
+    $('card2').classList.add('disabled'); $('card3').classList.add('disabled');
+  }
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* thumbnails, rendered lazily */
+let observer = null;
+async function buildThumbs() {
+  const box = $('thumbs'); box.innerHTML = '';
+  if (observer) observer.disconnect();
+  if (state.pdf) { state.pdf.destroy(); state.pdf = null; }
+  for (let i = 1; i <= state.total; i++) {
+    const d = document.createElement('div');
+    d.className = 'th'; d.dataset.p = i; d.tabIndex = 0;
+    d.innerHTML = `<div class="pg">${i}</div><div class="num">Page ${i}</div><div class="tick">✓</div>`;
+    d.onclick = e => clickThumb(i, e.shiftKey);
+    d.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickThumb(i, e.shiftKey); } };
+    box.appendChild(d);
+  }
+  try {
+    state.pdf = await pdfjsLib.getDocument({ data: state.bytes.slice() }).promise;
+  } catch { return; }
+  const pdf = state.pdf;
+  const queue = []; let busy = false;
+  const pump = async () => {
+    if (busy) return; busy = true;
+    while (queue.length && pdf === state.pdf) {
+      const el = queue.shift();
+      if (el.dataset.done) continue; el.dataset.done = 1;
+      try {
+        const page = await pdf.getPage(+el.dataset.p);
+        const vp0 = page.getViewport({ scale: 1 });
+        const scale = 200 / Math.max(vp0.width, vp0.height);
+        const vp = page.getViewport({ scale });
+        const c = document.createElement('canvas');
+        c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+        await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        const pg = el.querySelector('.pg'); pg.textContent = ''; pg.appendChild(c);
+        page.cleanup();
+      } catch {}
+    }
+    busy = false;
+  };
+  observer = new IntersectionObserver(ents => {
+    for (const en of ents) if (en.isIntersecting) { queue.push(en.target); observer.unobserve(en.target); }
+    pump();
+  }, { root: box, rootMargin: '300px' });
+  box.querySelectorAll('.th').forEach(el => observer.observe(el));
+}
+
+function clickThumb(p, shift) {
+  const sel = state.selected;
+  if (shift && state.anchor) {
+    const on = !sel.has(p) || sel.has(state.anchor);
+    const [a, b] = [Math.min(state.anchor, p), Math.max(state.anchor, p)];
+    for (let i = a; i <= b; i++) on ? sel.add(i) : sel.delete(i);
+  } else {
+    sel.has(p) ? sel.delete(p) : sel.add(p);
+  }
+  state.anchor = p;
+  $('range').value = compress([...sel]);
+  update();
+}
+
+$('range').oninput = () => update();
+
+document.querySelectorAll('.quick button').forEach(b => b.onclick = () => {
+  const all = Array.from({ length: state.total }, (_, i) => i + 1);
+  let pick;
+  switch (b.dataset.q) {
+    case 'all': pick = all; break;
+    case 'none': pick = []; break;
+    case 'odd': pick = all.filter(n => n % 2); break;
+    case 'even': pick = all.filter(n => !(n % 2)); break;
+    case 'invert': pick = all.filter(n => !state.selected.has(n)); break;
+  }
+  $('range').value = compress(pick);
+  update();
+});
+
+$('modeKeep').onclick = () => setMode('keep');
+$('modeDel').onclick = () => setMode('del');
+function setMode(m) {
+  state.mode = m;
+  $('modeKeep').classList.toggle('on', m === 'keep');
+  $('modeDel').classList.toggle('on', m === 'del');
+  update();
+}
+
+// Final list of output groups (arrays of 1-based page numbers) for the current mode.
+function outputGroups() {
+  if (state.mode === 'keep') return state.groups.map(g => ({ label: g.label, pages: g.pages }));
+  const keep = [];
+  for (let i = 1; i <= state.total; i++) if (!state.selected.has(i)) keep.push(i);
+  // runs of consecutive kept pages become groups
+  const groups = [];
+  for (const n of keep) {
+    const last = groups[groups.length - 1];
+    if (last && last.pages[last.pages.length - 1] === n - 1) last.pages.push(n);
+    else groups.push({ pages: [n] });
+  }
+  groups.forEach(g => g.label = g.pages.length > 1 ? `${g.pages[0]}-${g.pages[g.pages.length - 1]}` : String(g.pages[0]));
+  return groups;
+}
+
+function update() {
+  const text = $('range').value;
+  const res = parseRanges(text, state.total);
+  const check = $('check');
+  if (res.error) {
+    check.className = 'msg err'; check.textContent = res.error;
+    state.groups = [];
+  } else {
+    check.className = 'msg'; check.textContent = '';
+    state.groups = res.groups;
+  }
+  state.selected = new Set(state.groups.flatMap(g => g.pages));
+  const keepMode = state.mode === 'keep';
+  document.querySelectorAll('.th').forEach(el => {
+    const on = state.selected.has(+el.dataset.p);
+    el.classList.toggle('sel', on && keepMode);
+    el.classList.toggle('del', on && !keepMode);
+    el.querySelector('.tick').textContent = keepMode ? '✓' : '✕';
+  });
+
+  const groups = outputGroups();
+  const count = groups.reduce((n, g) => n + g.pages.length, 0);
+  const ok = !res.error && count > 0;
+  const sum = $('summary');
+  if (res.error) sum.textContent = '';
+  else if (!state.selected.size) sum.innerHTML = keepMode ? 'No pages selected yet.' : 'No pages marked for removal yet.';
+  else if (!count) sum.innerHTML = `<span style="color:var(--err)">That would remove every page.</span>`;
+  else sum.innerHTML = keepMode
+    ? `New PDF will have <b>${count}</b> page${count === 1 ? '' : 's'}.`
+    : `Removing <b>${state.selected.size}</b> page${state.selected.size === 1 ? '' : 's'} · new PDF will have <b>${count}</b>.`;
+
+  $('card3').classList.toggle('disabled', !ok);
+  $('btnGroups').disabled = !ok || groups.length < 2;
+  $('btnPages').disabled = !ok || count < 2;
+  $('groupHint').textContent = ok
+    ? (keepMode ? `${groups.length} range${groups.length === 1 ? '' : 's'} typed` : `${groups.length} block${groups.length === 1 ? '' : 's'} of remaining pages`) +
+      (groups.length < 2 ? ' — type at least two ranges (e.g. 1-3, 7) to split by range.' : '.')
+    : '';
+  const base = cleanName(state.name);
+  const names = ok ? groups.slice(0, 6).map(g => `${base}_p${g.label}.pdf`) : [];
+  $('files').innerHTML = names.map(n => `<span class="chip">${esc(n)}</span>`).join('') + (ok && groups.length > 6 ? `<span class="chip">…</span>` : '');
+  setStatus('');
+}
+
+/* ---------- building ---------- */
+async function build(pages, src) {
+  const out = await PDFLib.PDFDocument.create();
+  const copied = await out.copyPages(src, pages.map(n => n - 1));
+  copied.forEach(p => out.addPage(p));
+  return out.save();
+}
+function save(bytes, name, type) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function setStatus(t, cls) { const s = $('status'); s.textContent = t; s.style.color = cls === 'err' ? 'var(--err)' : cls === 'ok' ? 'var(--ok)' : ''; }
+function progress(f) { const b = $('bar'); b.style.display = f == null ? 'none' : 'block'; b.firstElementChild.style.width = ((f || 0) * 100) + '%'; }
+function busy(on) { ['btnOne', 'btnGroups', 'btnPages'].forEach(id => $(id).dataset.busy = on ? 1 : ''); document.querySelectorAll('#card3 button').forEach(b => b.style.pointerEvents = on ? 'none' : ''); }
+
+async function run(kind) {
+  const groups = outputGroups();
+  const base = cleanName(state.name);
+  busy(true); setStatus('Working…'); progress(0);
+  try {
+    const src = await PDFLib.PDFDocument.load(state.bytes, { ignoreEncryption: true });
+    if (kind === 'one') {
+      const pages = groups.flatMap(g => g.pages);
+      const suffix = state.mode === 'keep' ? 'extract' : 'trimmed';
+      save(await build(pages, src), `${base}_${suffix}.pdf`, 'application/pdf');
+      setStatus(`Saved ${pages.length} pages.`, 'ok');
+    } else {
+      const items = kind === 'groups'
+        ? groups.map(g => ({ name: `${base}_p${g.label}.pdf`, pages: g.pages }))
+        : groups.flatMap(g => g.pages).map(n => ({ name: `${base}_p${n}.pdf`, pages: [n] }));
+      const zip = new JSZip(), used = {};
+      for (let i = 0; i < items.length; i++) {
+        let nm = items[i].name;
+        if (used[nm]) nm = nm.replace(/\.pdf$/, `_${++used[items[i].name]}.pdf`); else used[nm] = 1;
+        zip.file(nm, await build(items[i].pages, src));
+        progress((i + 1) / items.length * 0.8);
+        setStatus(`Making file ${i + 1} of ${items.length}…`);
+      }
+      const blob = await zip.generateAsync({ type: 'uint8array' }, m => progress(0.8 + m.percent / 500));
+      save(blob, `${base}_${kind === 'groups' ? 'ranges' : 'pages'}.zip`, 'application/zip');
+      setStatus(`Saved ${items.length} PDFs in a zip.`, 'ok');
+    }
+  } catch (err) {
+    setStatus(err.message || 'Something went wrong.', 'err');
+  } finally {
+    busy(false); setTimeout(() => progress(null), 600);
+  }
+}
+$('btnOne').onclick = () => run('one');
+$('btnGroups').onclick = () => run('groups');
+$('btnPages').onclick = () => run('pages');
+</script>
+</body>
+</html>
