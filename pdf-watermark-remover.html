@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watermark Remover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #bc4c00; --accent-ink: #ffffff; --accent-soft: #fff1e5;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --chip: #eef1f4;
+    --warn: #8a5a00; --warn-soft: #fff6dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #f0883e; --accent-ink: #2a1300; --accent-soft: #3a2414;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+      --warn: #e3b341; --warn-soft: #33290f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #f0883e; --accent-ink: #2a1300; --accent-soft: #3a2414;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+    --warn: #e3b341; --warn-soft: #33290f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
+  a.home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  a.home:hover { color: var(--accent); }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  .card h3 { font-size: .92rem; margin: 18px 0 8px; }
+  .card h3:first-of-type { margin-top: 4px; }
+  .step {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 700; flex: none;
+  }
+  .card.disabled { opacity: .5; pointer-events: none; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  #fileInfo { margin-top: 12px; font-size: .95rem; }
+  #fileInfo .name { font-weight: 600; word-break: break-all; }
+
+  /* candidate list */
+  .cands { display: flex; flex-direction: column; gap: 8px; }
+  .cand {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start;
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer;
+  }
+  .cand.on { border-color: var(--accent); background: var(--accent-soft); }
+  .cand input { margin-top: 4px; accent-color: var(--accent); width: 16px; height: 16px; }
+  .cand .t { font-weight: 600; word-break: break-word; }
+  .cand .d { font-size: .82rem; color: var(--muted); }
+  .tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+         background: var(--chip); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
+  .tag.sug { background: var(--ok-soft); color: var(--ok); }
+  .empty { font-size: .9rem; color: var(--muted); background: var(--chip); border-radius: 10px; padding: 10px 12px; }
+
+  /* scan clean-up */
+  .scanrow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  @media (max-width: 620px) { .scanrow { grid-template-columns: 1fr; } }
+  label.f { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input[type=text], select {
+    width: 100%; font: inherit; font-size: 1rem; padding: 9px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input[type=text].bad { border-color: var(--err); }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .hint.bad { color: var(--err); }
+  .swatches { display: flex; gap: 3px; margin-top: 8px; }
+  .swatches span { flex: 1; height: 18px; border-radius: 4px; position: relative; border: 1px solid rgba(127,127,127,.25); }
+  .swatches span.gone::after {
+    content: ""; position: absolute; inset: 0; border-radius: 3px;
+    background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(188,76,0,.55) 4px 6px);
+  }
+  .swatchlbl { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-top: 3px; }
+
+  /* preview */
+  .pagenav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 0 10px; flex-wrap: wrap; }
+  .pagenav .pl { font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { background: transparent; color: var(--muted); padding: 6px 12px; font-size: .85rem; border-radius: 8px; }
+  .seg button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .stage { position: relative; background: var(--chip); border-radius: 10px; padding: 12px; display: flex; justify-content: center; min-height: 200px; }
+  .sheet { position: relative; line-height: 0; box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 6px 18px rgba(0,0,0,.08); background: #fff; }
+  .sheet canvas { display: block; max-width: 100%; }
+  .busy { position: absolute; top: 18px; right: 18px; font-size: .8rem; background: var(--panel); color: var(--muted);
+          padding: 3px 10px; border-radius: 999px; line-height: 1.5; display: none; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .pagemode { text-align: center; font-size: .82rem; color: var(--muted); margin-top: 8px; }
+  .legend { color: var(--err); font-weight: 600; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.small { padding: 6px 12px; font-size: .88rem; }
+  button.link { background: none; color: var(--accent); padding: 0; font-size: .82rem; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .msg { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); }
+  .msg:empty { display: none; }
+  #status { margin-top: 12px; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  .bar { height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  footer { margin-top: 28px; font-size: .82rem; color: var(--muted); }
+  footer ol { padding-left: 18px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>Watermark Remover</h1>
+    <p>Remove grey diagonal watermarks from digital PDFs and scanned pages.</p>
+    <div class="privacy">🔒 Runs in your browser. The PDF is never uploaded.</div>
+  </header>
+
+  <!-- Step 1 -->
+  <section class="card">
+    <h2><span class="step">1</span>Open a PDF</h2>
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <strong>Choose a PDF</strong> or drag it here
+      <small>Digital, scanned, or a mix of both</small>
+    </div>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div id="fileInfo"></div>
+    <div class="msg" id="loadMsg"></div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="card disabled" id="setCard">
+    <h2><span class="step">2</span>Choose what to remove</h2>
+
+    <h3>Watermarks found in the PDF</h3>
+    <div class="cands" id="cands"></div>
+
+    <h3>Scanned pages</h3>
+    <div class="scanrow">
+      <div>
+        <label class="f" for="scanPages">Clean these pages as scans</label>
+        <input type="text" id="scanPages" placeholder="e.g. 1-5, 8" autocomplete="off" inputmode="numeric">
+        <div class="hint" id="scanHint"></div>
+      </div>
+      <div>
+        <label class="f" for="strength">Strength: remove shades lighter than the ones kept</label>
+        <input type="range" id="strength" min="0" max="100" value="50">
+        <div class="swatches" id="swatches"></div>
+        <div class="swatchlbl"><span>White</span><span>Black</span></div>
+      </div>
+      <div>
+        <label class="f" for="dpi">Scan quality</label>
+        <select id="dpi">
+          <option value="150">Standard (150 dpi, smaller file)</option>
+          <option value="200" selected>High (200 dpi)</option>
+          <option value="300">Very high (300 dpi, large file)</option>
+        </select>
+      </div>
+      <div>
+        <label class="f" for="colour">Colour</label>
+        <select id="colour">
+          <option value="keep" selected>Keep colour (e.g. red marking)</option>
+          <option value="grey">Black &amp; white</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint">Striped shades are turned white. A grey watermark disappears while darker writing stays. If faint pencil or light text also fades, lower the strength.</p>
+
+    <div class="pagenav">
+      <button class="secondary small" id="prev" aria-label="Previous page">‹ Prev</button>
+      <span class="pl" id="pageLbl">Page – of –</span>
+      <div class="seg" role="tablist" aria-label="Preview">
+        <button data-view="before">Before</button>
+        <button data-view="after" class="on">After</button>
+        <button data-view="diff">Removed</button>
+      </div>
+      <button class="secondary small" id="next" aria-label="Next page">Next ›</button>
+    </div>
+    <div class="stage">
+      <div class="sheet"><canvas id="cv" width="10" height="14"></canvas></div>
+      <div class="busy" id="busy">Updating…</div>
+    </div>
+    <div class="pagemode" id="pageMode"></div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="card disabled" id="goCard">
+    <h2><span class="step">3</span>Download</h2>
+    <div class="actions">
+      <button id="go">Remove watermark &amp; download PDF</button>
+    </div>
+    <div class="bar" id="bar"><div></div></div>
+    <div id="status"></div>
+    <div class="msg" id="outMsg"></div>
+  </section>
+
+  <footer>
+    <strong>Notes</strong>
+    <ol>
+      <li>Digital pages keep sharp, selectable text: only the watermark itself is taken out.</li>
+      <li>Scanned pages are rebuilt as images with light shades turned white. A watermark darker than the writing, or one that covers the writing, cannot be fully separated.</li>
+      <li>A digital page with a watermark that isn’t listed above can be added to the scan list. It will then be cleaned as an image.</li>
+      <li>Use “Removed” in the preview to see exactly what will be taken out: red is removed, faded grey is kept.</li>
+    </ol>
+  </footer>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFNumber, PDFString, PDFHexString,
+        PDFRawStream, decodePDFRawStream } = PDFLib;
+const $ = id => document.getElementById(id);
+
+let fileBytes = null, fileName = '', pjsDoc = null, libDoc = null, numPages = 0, cur = 0;
+let encrypted = false;
+let groups = new Map();           // key -> group info
+let pageInfo = [];                // per page: { groups:Set, scanned:boolean }
+let active = new Set();           // ticked group keys
+let scanSet = new Set();          // 1-based page numbers cleaned as scans
+let view = 'after';
+
+/* =====================================================================
+   PDF content-stream reading
+   ===================================================================== */
+const WS = new Set([0, 9, 10, 12, 13, 32]);
+const DELIM = new Set([40, 41, 60, 62, 91, 93, 123, 125, 47, 37]);
+
+function lex(bytes) {
+  // Returns a list of operations: { op, args, s, e, opS } (byte offsets)
+  const ops = [], n = bytes.length;
+  let i = 0, stack = [], args = [], argStart = -1;
+  const isReg = c => !WS.has(c) && !DELIM.has(c);
+
+  function readString() {          // at '('
+    const out = []; let depth = 1; i++;
+    while (i < n && depth > 0) {
+      let c = bytes[i++];
+      if (c === 92) {               // backslash
+        const d = bytes[i++];
+        if (d === 110) out.push(10); else if (d === 114) out.push(13);
+        else if (d === 116) out.push(9); else if (d === 98) out.push(8);
+        else if (d === 102) out.push(12);
+        else if (d === 13) { if (bytes[i] === 10) i++; }
+        else if (d === 10) {}
+        else if (d >= 48 && d <= 55) {
+          let v = d - 48;
+          for (let k = 0; k < 2 && bytes[i] >= 48 && bytes[i] <= 55; k++) v = v * 8 + (bytes[i++] - 48);
+          out.push(v & 255);
+        } else out.push(d);
+      } else if (c === 40) { depth++; out.push(c); }
+      else if (c === 41) { depth--; if (depth > 0) out.push(c); }
+      else out.push(c);
+    }
+    return { t: 's', v: Uint8Array.from(out) };
+  }
+  function readHex() {             // at '<' (not '<<')
+    i++; let hex = '';
+    while (i < n && bytes[i] !== 62) { const c = bytes[i++]; if (!WS.has(c)) hex += String.fromCharCode(c); }
+    i++;
+    if (hex.length % 2) hex += '0';
+    const out = new Uint8Array(hex.length / 2);
+    for (let k = 0; k < out.length; k++) out[k] = parseInt(hex.substr(k * 2, 2), 16) || 0;
+    return { t: 's', v: out };
+  }
+  function readName() {            // at '/'
+    i++; let s = '';
+    while (i < n && isReg(bytes[i])) {
+      if (bytes[i] === 35 && i + 2 < n) { s += String.fromCharCode(parseInt(String.fromCharCode(bytes[i + 1], bytes[i + 2]), 16)); i += 3; }
+      else s += String.fromCharCode(bytes[i++]);
+    }
+    return { t: 'name', v: s };
+  }
+  function push(val) {
+    if (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.t === 'a') top.v.push(val);
+      else { if (top.k === null) top.k = val; else { top.v[top.k.v] = val; top.k = null; } }
+    } else args.push(val);
+  }
+
+  while (i < n) {
+    const c = bytes[i];
+    if (WS.has(c)) { i++; continue; }
+    if (c === 37) { while (i < n && bytes[i] !== 10 && bytes[i] !== 13) i++; continue; }   // comment
+    if (argStart < 0) argStart = i;
+    if (c === 40) { push(readString()); continue; }
+    if (c === 60) {
+      if (bytes[i + 1] === 60) { i += 2; stack.push({ t: 'd', v: {}, k: null }); continue; }
+      push(readHex()); continue;
+    }
+    if (c === 62 && bytes[i + 1] === 62) { i += 2; const d = stack.pop(); if (d) push({ t: 'd', v: d.v }); continue; }
+    if (c === 91) { i++; stack.push({ t: 'a', v: [] }); continue; }
+    if (c === 93) { i++; const a = stack.pop(); if (a) push({ t: 'a', v: a.v }); continue; }
+    if (c === 47) { push(readName()); continue; }
+    if (c === 123 || c === 125 || c === 41 || c === 62) { i++; continue; }
+    // regular token
+    const st = i;
+    while (i < n && isReg(bytes[i])) i++;
+    let tok = '';
+    for (let k = st; k < i; k++) tok += String.fromCharCode(bytes[k]);
+    if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(tok)) { push({ t: 'n', v: parseFloat(tok) }); continue; }
+    if (tok === 'true' || tok === 'false' || tok === 'null') { push({ t: 'k', v: tok }); continue; }
+    if (stack.length) { push({ t: 'k', v: tok }); continue; }   // stray keyword inside array/dict
+    if (tok === 'BI') {
+      // inline image: BI <dict pairs> ID <data> EI
+      const dict = {}; let key = null;
+      const sub = [];
+      // read pairs until ID
+      while (i < n) {
+        while (i < n && WS.has(bytes[i])) i++;
+        if (bytes[i] === 73 && bytes[i + 1] === 68 && (i + 2 >= n || WS.has(bytes[i + 2]))) { i += 3; break; }
+        // reuse mini lexer for one token
+        let v;
+        if (bytes[i] === 47) v = readName();
+        else if (bytes[i] === 40) v = readString();
+        else if (bytes[i] === 60 && bytes[i + 1] !== 60) v = readHex();
+        else if (bytes[i] === 91) {   // small array
+          let depth = 0, t = '';
+          do { const ch = bytes[i++]; if (ch === 91) depth++; if (ch === 93) depth--; t += String.fromCharCode(ch); } while (i < n && depth > 0);
+          v = { t: 'raw', v: t };
+        } else {
+          const s2 = i; while (i < n && isReg(bytes[i])) i++;
+          let t = ''; for (let k = s2; k < i; k++) t += String.fromCharCode(bytes[k]);
+          v = /^[+-]?(\d+\.?\d*|\.\d+)$/.test(t) ? { t: 'n', v: parseFloat(t) } : { t: 'k', v: t };
+          if (s2 === i) i++;
+        }
+        if (key === null) key = v; else { dict[key.v] = v; key = null; }
+        sub.push(v);
+      }
+      // find EI
+      let j = i;
+      while (j < n - 1) {
+        if (bytes[j] === 69 && bytes[j + 1] === 73 && WS.has(bytes[j - 1]) && (j + 2 >= n || WS.has(bytes[j + 2]) || DELIM.has(bytes[j + 2]))) break;
+        j++;
+      }
+      i = Math.min(n, j + 2);
+      ops.push({ op: 'BI', args: [{ t: 'd', v: dict }], s: argStart, e: i, opS: st });
+      args = []; argStart = -1;
+      continue;
+    }
+    ops.push({ op: tok, args, s: argStart, e: i, opS: st });
+    args = []; argStart = -1;
+  }
+  return ops;
+}
+
+/* ---------- pdf-lib helpers ---------- */
+function mkL(ctx) { return o => (o instanceof PDFRef ? ctx.lookup(o) : o); }
+function dget(ctx, dict, key) {
+  if (!dict || !(dict instanceof PDFDict)) return undefined;
+  const v = dict.get(PDFName.of(key));
+  return v instanceof PDFRef ? ctx.lookup(v) : v;
+}
+function nameStr(o) { return o instanceof PDFName ? o.decodeText() : null; }
+function numVal(o) { return o instanceof PDFNumber ? o.asNumber() : null; }
+function textVal(o) {
+  if (o instanceof PDFString || o instanceof PDFHexString) { try { return o.decodeText(); } catch (e) { return ''; } }
+  return null;
+}
+function streamBytes(stream) {
+  try {
+    if (stream instanceof PDFRawStream) return decodePDFRawStream(stream).decode();
+    if (stream && typeof stream.getContents === 'function') return stream.getContents();
+  } catch (e) { console.warn('Could not decode stream', e); }
+  return new Uint8Array(0);
+}
+function pageResources(ctx, node) {
+  let n = node, guard = 0;
+  while (n && guard++ < 50) {
+    const r = dget(ctx, n, 'Resources');
+    if (r instanceof PDFDict) return r;
+    n = dget(ctx, n, 'Parent');
+  }
+  return ctx.obj({});
+}
+function pageContentBytes(ctx, node) {
+  const c = dget(ctx, node, 'Contents');
+  const parts = [];
+  if (c instanceof PDFArray) {
+    for (let k = 0; k < c.size(); k++) { const s = c.lookup(k); if (s) parts.push(streamBytes(s)); }
+  } else if (c) parts.push(streamBytes(c));
+  let len = 0; parts.forEach(p => len += p.length + 1);
+  const out = new Uint8Array(len); let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; out[off++] = 10; }
+  return out;
+}
+function pageArea(ctx, node) {
+  let n = node, guard = 0, box = null;
+  while (n && guard++ < 50 && !box) {
+    box = dget(ctx, n, 'CropBox') || dget(ctx, n, 'MediaBox');
+    n = dget(ctx, n, 'Parent');
+  }
+  if (box instanceof PDFArray && box.size() === 4) {
+    const v = [0, 1, 2, 3].map(k => numVal(box.lookup(k)) || 0);
+    return Math.abs((v[2] - v[0]) * (v[3] - v[1])) || 612 * 792;
+  }
+  return 612 * 792;
+}
+
+/* ---------- matrices ---------- */
+const I = [1, 0, 0, 1, 0, 0];
+function mul(m, n) {
+  return [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3],
+          m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3],
+          m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+}
+function angleOf(m) {
+  let a = Math.atan2(m[1], m[0]) * 180 / Math.PI;
+  a = ((a % 360) + 360) % 360;
+  return a;
+}
+function isAxis(a) { const r = a % 90; return r < 3 || r > 87; }
+function angleLabel(a) {
+  let d = Math.round(a); if (d > 180) d -= 360;
+  return d;
+}
+
+/* ---------- colour ---------- */
+function lightness(col) {
+  if (!col || !col.v) return null;
+  const v = col.v;
+  if (col.cs === 'gray' && v.length >= 1) return v[0];
+  if (col.cs === 'rgb' && v.length >= 3) return 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2];
+  if (col.cs === 'cmyk' && v.length >= 4) {
+    const r = (1 - v[0]) * (1 - v[3]), g = (1 - v[1]) * (1 - v[3]), b = (1 - v[2]) * (1 - v[3]);
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  return null;
+}
+function colourWord(col) {
+  const L = lightness(col);
+  if (L === null) return '';
+  const v = col.v;
+  let sat = 0;
+  if (col.cs === 'rgb') sat = Math.max(...v.slice(0, 3)) - Math.min(...v.slice(0, 3));
+  if (col.cs === 'cmyk') sat = Math.max(v[0], v[1], v[2]) - Math.min(v[0], v[1], v[2]);
+  const shade = L > 0.85 ? 'very light' : L > 0.6 ? 'light' : L > 0.35 ? 'mid' : 'dark';
+  if (sat > 0.15) return `${shade} coloured`;
+  return L > 0.35 ? `${shade} grey` : 'black';
+}
+function csFromName(ctx, res, name) {
+  if (name === 'DeviceGray' || name === 'G' || name === 'CalGray') return 'gray';
+  if (name === 'DeviceRGB' || name === 'RGB' || name === 'CalRGB') return 'rgb';
+  if (name === 'DeviceCMYK' || name === 'CMYK') return 'cmyk';
+  const csd = dget(ctx, res, 'ColorSpace');
+  const cs = dget(ctx, csd, name);
+  if (cs instanceof PDFName) return csFromName(ctx, res, cs.decodeText());
+  if (cs instanceof PDFArray) {
+    const fam = nameStr(cs.lookup(0));
+    if (fam === 'ICCBased') {
+      const st = cs.lookup(1); const N = st && numVal(dget(ctx, st.dict, 'N'));
+      return N === 1 ? 'gray' : N === 4 ? 'cmyk' : 'rgb';
+    }
+    if (fam === 'CalRGB' || fam === 'Lab') return 'rgb';
+    if (fam === 'CalGray') return 'gray';
+    if (fam === 'Separation') return 'sep';
+  }
+  return 'other';
+}
+
+/* ---------- fonts: text sample for labels ---------- */
+const fontCache = new WeakMap();
+function fontInfo(ctx, fdict) {
+  if (!fdict) return null;
+  if (fontCache.has(fdict)) return fontCache.get(fdict);
+  const info = { width: 1, ranges: [], chars: new Map(), base: nameStr(dget(ctx, fdict, 'BaseFont')) || '' };
+  info.base = info.base.replace(/^[A-Z]{6}\+/, '');
+  if (nameStr(dget(ctx, fdict, 'Subtype')) === 'Type0') info.width = 2;
+  const tu = dget(ctx, fdict, 'ToUnicode');
+  if (tu && tu.dict) {
+    const b = streamBytes(tu); let s = '';
+    for (let k = 0; k < b.length; k++) s += String.fromCharCode(b[k]);
+    const cs = s.match(/begincodespacerange\s*<([0-9a-fA-F]+)>/);
+    if (cs) info.width = Math.max(1, cs[1].length / 2);
+    const hexStr = h => { let o = ''; for (let k = 0; k + 3 < h.length + 1; k += 4) o += String.fromCharCode(parseInt(h.substr(k, 4).padEnd(4, '0'), 16)); return o; };
+    for (const blk of s.matchAll(/beginbfchar([\s\S]*?)endbfchar/g))
+      for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) info.chars.set(parseInt(m[1], 16), hexStr(m[2]));
+    for (const blk of s.matchAll(/beginbfrange([\s\S]*?)endbfrange/g))
+      for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F]*>|\[[^\]]*\])/g)) {
+        const lo = parseInt(m[1], 16), hi = parseInt(m[2], 16);
+        if (m[3][0] === '<') info.ranges.push({ lo, hi, base: hexStr(m[3].slice(1, -1)) });
+        else { const list = [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].map(x => hexStr(x[1])); for (let c = lo; c <= hi && c - lo < list.length; c++) info.chars.set(c, list[c - lo]); }
+      }
+  }
+  info.hasMap = info.chars.size > 0 || info.ranges.length > 0;
+  fontCache.set(fdict, info);
+  return info;
+}
+function decodeText(info, bytes) {
+  if (!bytes || !bytes.length) return '';
+  let out = '';
+  const w = info ? info.width : 1;
+  for (let k = 0; k + w <= bytes.length; k += w) {
+    let code = 0; for (let j = 0; j < w; j++) code = code * 256 + bytes[k + j];
+    let ch = null;
+    if (info && info.hasMap) {
+      ch = info.chars.get(code);
+      if (ch === undefined) {
+        const r = info.ranges.find(r => code >= r.lo && code <= r.hi);
+        if (r) ch = r.base.slice(0, -1) + String.fromCharCode(r.base.charCodeAt(r.base.length - 1) + code - r.lo);
+      }
+    } else if (w === 1) ch = (code >= 32 && code < 127) || code >= 160 ? String.fromCharCode(code) : null;
+    if (ch) out += ch;
+  }
+  return out.replace(/[\u0000-\u001f]/g, '');
+}
+
+/* ---------- optional content / watermark markers ---------- */
+const WM_RE = /water\s*-?mark|浮水印|水印|wasserzeichen|filigrane/i;
+function ocgNames(ctx, o) {
+  o = o instanceof PDFRef ? ctx.lookup(o) : o;
+  if (!(o instanceof PDFDict)) return [];
+  const t = nameStr(dget(ctx, o, 'Type'));
+  if (t === 'OCMD') {
+    const g = dget(ctx, o, 'OCGs');
+    if (g instanceof PDFArray) { const r = []; for (let k = 0; k < g.size(); k++) r.push(...ocgNames(ctx, g.get(k))); return r; }
+    return ocgNames(ctx, g);
+  }
+  const nm = textVal(dget(ctx, o, 'Name'));
+  return nm ? [nm] : [];
+}
+function isAcrobatWatermark(ctx, formDict) {
+  const pi = dget(ctx, formDict, 'PieceInfo');
+  const ct = dget(ctx, pi, 'ADBE_CompoundType');
+  return nameStr(dget(ctx, ct, 'Private')) === 'Watermark';
+}
+
+/* =====================================================================
+   Analysis: walk a content stream, find watermark-like drawing ops
+   ===================================================================== */
+function analyzeContent(ctx, bytes, res, init, env, depth) {
+  const ops = lex(bytes);
+  const node = { bytes, ops, items: [], forms: [] };
+  let mc = init.mc;
+  let gs = { ctm: init.ctm, fill: init.fill, stroke: init.stroke, ca: init.ca, CA: init.CA, smask: init.smask,
+             font: null, finfo: null, fsize: 0, Tr: 0, TL: 0, Tz: 100 };
+  const gstack = [];
+  let Tm = I, Tlm = I, inText = false, moved = true;
+  const mcStack = [];
+  const fontDicts = dget(ctx, res, 'Font'), xobjs = dget(ctx, res, 'XObject');
+  const exts = dget(ctx, res, 'ExtGState'), props = dget(ctx, res, 'Properties');
+
+  const flagGroup = (key, title, kind) => {
+    env.addGroup(key, { kind, title, strong: true, desc: kind === 'layer' ? 'Marked as a watermark inside the PDF' : '' });
+    return key;
+  };
+  const alphaKey = (a, sm) => (sm ? 'sm' : (Math.round(a * 20) / 20).toFixed(2));
+  const transpWord = (a, sm) => sm ? 'soft-masked' : a < 0.95 ? `${Math.round((1 - a) * 100)}% transparent` : '';
+
+  function setCol(which, args, cs) {
+    const v = args.filter(a => a.t === 'n').map(a => a.v);
+    gs[which] = { cs: cs || (v.length === 1 ? 'gray' : v.length === 3 ? 'rgb' : v.length === 4 ? 'cmyk' : 'other'), v };
+  }
+  function textCandidate(op, strBytes) {
+    if (gs.Tr === 3 || gs.Tr === 7) return null;
+    const M = mul(Tm, gs.ctm);
+    const ang = angleOf(M);
+    const rot = !isAxis(ang);
+    const col = (gs.Tr === 1 || gs.Tr === 5) ? gs.stroke : gs.fill;
+    const alpha = (gs.Tr === 1 || gs.Tr === 5) ? gs.CA : gs.ca;
+    const L = lightness(col);
+    const light = L !== null && L >= 0.55;
+    const transp = alpha < 0.95 || gs.smask;
+    const size = gs.fsize * Math.sqrt(Math.abs(M[0] * M[3] - M[1] * M[2]));
+    const big = size >= 40;
+    if (mc) return mc;
+    if (!(rot || transp || (big && light))) { env.stats.text++; return null; }
+    const strong = (light || transp) && (rot || big || (transp && light));
+    const angB = rot ? Math.round(ang) : Math.round(ang / 90) * 90 % 360;
+    const key = `t|${angB}|${col ? col.cs + (col.v || []).map(x => x.toFixed(2)).join(',') : ''}|${alphaKey(alpha, gs.smask)}|${gs.finfo ? gs.finfo.base : ''}`;
+    const sample = decodeText(gs.finfo, strBytes);
+    const bits = [];
+    if (rot) bits.push(`diagonal (${angleLabel(ang)}°)`); else if (angB) bits.push(`rotated ${angleLabel(angB)}°`);
+    const cw = colourWord(col); if (cw) bits.push(cw);
+    const tw = transpWord(alpha, gs.smask); if (tw) bits.push(tw);
+    if (big) bits.push('large');
+    env.addGroup(key, { kind: 'text', strong, desc: bits.join(' · '), sample, gap: moved });
+    moved = false;
+    return key;
+  }
+  function pathCandidate(op) {
+    const isStroke = op === 'S' || op === 's';
+    const col = isStroke ? gs.stroke : gs.fill;
+    const alpha = isStroke ? gs.CA : gs.ca;
+    if (mc) return mc;
+    const ang = angleOf(gs.ctm), rot = !isAxis(ang);
+    const L = lightness(col), light = L !== null && L >= 0.55;
+    const transp = alpha < 0.95 || gs.smask;
+    if (!(transp || (rot && light))) { env.stats.paths++; return null; }
+    const strong = rot && (light || transp);
+    const angB = rot ? Math.round(ang) : 0;
+    const key = `p|${angB}|${col ? col.cs + (col.v || []).map(x => x.toFixed(2)).join(',') : ''}|${alphaKey(alpha, gs.smask)}`;
+    const bits = [];
+    if (rot) bits.push(`diagonal (${angleLabel(ang)}°)`);
+    const cw = colourWord(col); if (cw) bits.push(cw);
+    const tw = transpWord(alpha, gs.smask); if (tw) bits.push(tw);
+    env.addGroup(key, { kind: 'path', strong, desc: bits.join(' · ') });
+    return key;
+  }
+
+  for (let idx = 0; idx < ops.length; idx++) {
+    const o = ops[idx], a = o.args;
+    switch (o.op) {
+      case 'q': gstack.push({ ...gs }); break;
+      case 'Q': if (gstack.length) gs = gstack.pop(); break;
+      case 'cm': if (a.length >= 6) gs.ctm = mul(a.slice(0, 6).map(x => x.v || 0), gs.ctm); break;
+      case 'gs': {
+        const nm = a[0] && a[0].v; const d = dget(ctx, exts, nm);
+        if (d instanceof PDFDict) {
+          const ca = numVal(dget(ctx, d, 'ca')), CA = numVal(dget(ctx, d, 'CA'));
+          if (ca !== null) gs.ca = ca;
+          if (CA !== null) gs.CA = CA;
+          const sm = dget(ctx, d, 'SMask');
+          if (sm !== undefined) gs.smask = !(sm instanceof PDFName && sm.decodeText() === 'None');
+        }
+        break;
+      }
+      case 'g': setCol('fill', a, 'gray'); break;
+      case 'G': setCol('stroke', a, 'gray'); break;
+      case 'rg': setCol('fill', a, 'rgb'); break;
+      case 'RG': setCol('stroke', a, 'rgb'); break;
+      case 'k': setCol('fill', a, 'cmyk'); break;
+      case 'K': setCol('stroke', a, 'cmyk'); break;
+      case 'cs': case 'CS': {
+        const cs = csFromName(ctx, res, a[0] && a[0].v);
+        const def = cs === 'gray' ? [0] : cs === 'rgb' ? [0, 0, 0] : cs === 'cmyk' ? [0, 0, 0, 1] : [];
+        gs[o.op === 'cs' ? 'fill' : 'stroke'] = { cs, v: def };
+        break;
+      }
+      case 'sc': case 'scn': case 'SC': case 'SCN': {
+        const w = (o.op === 'sc' || o.op === 'scn') ? 'fill' : 'stroke';
+        const curCs = gs[w] ? gs[w].cs : 'gray';
+        const v = a.filter(x => x.t === 'n').map(x => x.v);
+        if (curCs === 'sep' && v.length === 1) gs[w] = { cs: 'gray', v: [1 - v[0]] };   // tint → approx. grey
+        else gs[w] = { cs: curCs, v };
+        break;
+      }
+      case 'BT': inText = true; Tm = I; Tlm = I; moved = true; break;
+      case 'ET': inText = false; break;
+      case 'Tf': {
+        const nm = a[0] && a[0].v; gs.fsize = a[1] ? a[1].v : 0;
+        const fd = dget(ctx, fontDicts, nm); gs.font = nm; gs.finfo = fontInfo(ctx, fd);
+        break;
+      }
+      case 'Tr': gs.Tr = a[0] ? a[0].v : 0; break;
+      case 'TL': gs.TL = a[0] ? a[0].v : 0; break;
+      case 'Tz': gs.Tz = a[0] ? a[0].v : 100; break;
+      case 'Td': if (a.length >= 2) { Tlm = mul([1, 0, 0, 1, a[0].v, a[1].v], Tlm); Tm = Tlm; moved = true; } break;
+      case 'TD': if (a.length >= 2) { gs.TL = -a[1].v; Tlm = mul([1, 0, 0, 1, a[0].v, a[1].v], Tlm); Tm = Tlm; moved = true; } break;
+      case 'Tm': if (a.length >= 6) { Tlm = a.slice(0, 6).map(x => x.v || 0); Tm = Tlm; moved = true; } break;
+      case 'T*': Tlm = mul([1, 0, 0, 1, 0, -gs.TL], Tlm); Tm = Tlm; moved = true; break;
+      case 'Tj': case 'TJ': case "'": case '"': {
+        if (o.op === "'" || o.op === '"') { Tlm = mul([1, 0, 0, 1, 0, -gs.TL], Tlm); Tm = Tlm; moved = true; }
+        let sb;
+        if (o.op === 'TJ') {
+          const parts = (a[0] && a[0].v) || []; const chunks = [];
+          for (const p of parts) if (p.t === 's') chunks.push(p.v);
+          let len = 0; chunks.forEach(c => len += c.length);
+          sb = new Uint8Array(len); let off = 0; chunks.forEach(c => { sb.set(c, off); off += c.length; });
+        } else sb = (o.op === '"' ? a[2] : a[0]) ? (o.op === '"' ? a[2] : a[0]).v : null;
+        const g = textCandidate(o.op, sb);
+        if (g) node.items.push({ idx, g, kind: 'show' });
+        break;
+      }
+      case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'S': case 's': {
+        const g = pathCandidate(o.op);
+        if (g) node.items.push({ idx, g, kind: 'paint' });
+        break;
+      }
+      case 'sh': if (mc) node.items.push({ idx, g: mc, kind: 'del' }); break;
+      case 'BI': {
+        if (mc) node.items.push({ idx, g: mc, kind: 'del' });
+        else if (gs.ca < 0.95 || gs.smask) {
+          const key = `ii|${alphaKey(gs.ca, gs.smask)}`;
+          env.addGroup(key, { kind: 'image', strong: false, desc: transpWord(gs.ca, gs.smask) });
+          node.items.push({ idx, g: key, kind: 'del' });
+        }
+        break;
+      }
+      case 'BMC': mcStack.push(mc); break;
+      case 'BDC': {
+        mcStack.push(mc);
+        if (mc) break;
+        const tag = a[0] && a[0].v;
+        let p = a[1];
+        const pget = key => {
+          if (!p) return undefined;
+          if (p.t === 'd') return p.v[key];
+          if (p.t === 'name') { const d = dget(ctx, props, p.v); const v = dget(ctx, d, key); return v; }
+        };
+        if (tag === 'Artifact') {
+          const st = pget('Subtype');
+          const stName = st && (st.t === 'name' ? st.v : nameStr(st));
+          if (stName === 'Watermark') mc = flagGroup('mc|artifact', 'Watermark layer', 'layer');
+        } else if (tag === 'OC' && p && p.t === 'name') {
+          const names = ocgNames(ctx, props ? props.get(PDFName.of(p.v)) : null);
+          const wm = names.find(nm => WM_RE.test(nm));
+          if (wm) mc = flagGroup('mc|oc|' + wm, `Layer “${wm}”`, 'layer');
+        }
+        break;
+      }
+      case 'EMC': if (mcStack.length) mc = mcStack.pop(); break;
+      case 'Do': {
+        const nm = a[0] && a[0].v;
+        const ref = xobjs instanceof PDFDict ? xobjs.get(PDFName.of(nm)) : undefined;
+        const xo = ref instanceof PDFRef ? ctx.lookup(ref) : ref;
+        if (!xo || !xo.dict) break;
+        const sub = nameStr(dget(ctx, xo.dict, 'Subtype'));
+        if (mc) { node.items.push({ idx, g: mc, kind: 'del' }); break; }
+        // XObject in a watermark layer?
+        const oc = xo.dict.get(PDFName.of('OC'));
+        const wmLayer = oc ? ocgNames(ctx, oc).find(x => WM_RE.test(x)) : null;
+        if (wmLayer) { node.items.push({ idx, g: flagGroup('mc|oc|' + wmLayer, `Layer “${wmLayer}”`, 'layer'), kind: 'del' }); break; }
+        if (sub === 'Image') {
+          const area = Math.abs(gs.ctm[0] * gs.ctm[3] - gs.ctm[1] * gs.ctm[2]);
+          if (area >= env.pageArea * 0.6) { env.stats.bigImage = true; break; }
+          const ang = angleOf(gs.ctm), rot = !isAxis(ang);
+          const transp = gs.ca < 0.95 || gs.smask;
+          if (transp || rot) {
+            const W = numVal(dget(ctx, xo.dict, 'Width')), H = numVal(dget(ctx, xo.dict, 'Height'));
+            const key = `i|${W}x${H}|${alphaKey(gs.ca, gs.smask)}|${rot ? Math.round(ang) : 0}`;
+            const bits = [`${W}×${H} px`]; if (rot) bits.push(`diagonal (${angleLabel(ang)}°)`);
+            const tw = transpWord(gs.ca, gs.smask); if (tw) bits.push(tw);
+            env.addGroup(key, { kind: 'image', strong: !!transp, desc: bits.join(' · ') });
+            node.items.push({ idx, g: key, kind: 'del' });
+          } else env.stats.images++;
+          break;
+        }
+        if (sub === 'Form') {
+          if (isAcrobatWatermark(ctx, xo.dict)) {
+            node.items.push({ idx, g: flagGroup('acro', 'Watermark added by Acrobat', 'acro'), kind: 'del' });
+            break;
+          }
+          if (depth >= 8 || env.visiting.has(xo)) break;
+          const fm = dget(ctx, xo.dict, 'Matrix');
+          const fmat = fm instanceof PDFArray && fm.size() === 6 ? [0, 1, 2, 3, 4, 5].map(k => numVal(fm.lookup(k)) || 0) : I;
+          const fres = dget(ctx, xo.dict, 'Resources');
+          env.visiting.add(xo);
+          const child = analyzeContent(ctx, streamBytes(xo), fres instanceof PDFDict ? fres : res,
+            { ctm: mul(fmat, gs.ctm), fill: gs.fill, stroke: gs.stroke, ca: gs.ca, CA: gs.CA, smask: gs.smask, mc: null },
+            env, depth + 1);
+          env.visiting.delete(xo);
+          child.xo = xo; child.ownRes = fres instanceof PDFDict;
+          child.res = fres instanceof PDFDict ? fres : res;
+          if (child.items.length || child.forms.some(f => f.hasItems)) {
+            node.forms.push({ idx, name: nm, child, hasItems: true });
+          }
+        }
+        break;
+      }
+    }
+  }
+  return node;
+}
+
+function annotGroups(ctx, node, env) {
+  const ann = dget(ctx, node, 'Annots');
+  const found = [];
+  if (!(ann instanceof PDFArray)) return found;
+  for (let k = 0; k < ann.size(); k++) {
+    const d = ann.lookup(k);
+    const st = nameStr(dget(ctx, d, 'Subtype'));
+    if (st === 'Watermark') { env.addGroup('annot|Watermark', { kind: 'annot', title: 'Watermark annotation', strong: true, desc: 'Added as a watermark note on the page' }); found.push({ k, g: 'annot|Watermark' }); }
+    else if (st === 'Stamp') { env.addGroup('annot|Stamp', { kind: 'annot', title: 'Stamp', strong: false, desc: 'Rubber-stamp style note on the page' }); found.push({ k, g: 'annot|Stamp' }); }
+  }
+  return found;
+}
+
+/* analyse one page; groups are merged into the given map */
+function analyzePage(doc, pageIndex, groupMap) {
+  const ctx = doc.context, page = doc.getPage(pageIndex), node = page.node;
+  const env = {
+    pageArea: pageArea(ctx, node), visiting: new Set(), stats: { text: 0, paths: 0, images: 0, bigImage: false },
+    seen: new Set(),
+    addGroup(key, info) {
+      env.seen.add(key);
+      if (!groupMap) return;
+      let g = groupMap.get(key);
+      if (!g) { g = { key, ...info, pages: new Set(), n: 0, sample: '' }; groupMap.set(key, g); }
+      g.n++; g.pages.add(pageIndex + 1);
+      if (info.sample && g.sample.length < 60 && g.pages.size === 1) g.sample += (g.sample && info.gap ? ' ' : '') + info.sample;
+    }
+  };
+  const res = pageResources(ctx, node);
+  const root = analyzeContent(ctx, pageContentBytes(ctx, node), res,
+    { ctm: I, fill: { cs: 'gray', v: [0] }, stroke: { cs: 'gray', v: [0] }, ca: 1, CA: 1, smask: false, mc: null }, env, 0);
+  root.res = res;
+  const annots = annotGroups(ctx, node, env);
+  return { root, annots, stats: env.stats, groups: env.seen };
+}
+
+/* =====================================================================
+   Rewriting: drop the selected watermark ops
+   ===================================================================== */
+const enc = s => new TextEncoder().encode(s);
+function applyEdits(bytes, edits) {
+  edits.sort((x, y) => x.s - y.s);
+  const parts = []; let pos = 0, len = 0;
+  for (const ed of edits) {
+    if (ed.s < pos) continue;
+    parts.push(bytes.subarray(pos, ed.s)); parts.push(enc(' ' + ed.rep + ' '));
+    pos = ed.e;
+  }
+  parts.push(bytes.subarray(pos));
+  parts.forEach(p => len += p.length);
+  const out = new Uint8Array(len); let off = 0;
+  parts.forEach(p => { out.set(p, off); off += p.length; });
+  return out;
+}
+function opText(o) {
+  // replacement keeping the state effects of ' and "
+  if (o.op === "'") return 'T*';
+  if (o.op === '"') return `${o.args[0] ? o.args[0].v : 0} Tw ${o.args[1] ? o.args[1].v : 0} Tc T*`;
+  return '';
+}
+let nameCounter = 0;
+function rewriteNode(ctx, node, act) {
+  const edits = [];
+  for (const it of node.items) {
+    if (!act.has(it.g)) continue;
+    const o = node.ops[it.idx];
+    if (it.kind === 'paint') edits.push({ s: o.opS, e: o.e, rep: 'n' });
+    else if (it.kind === 'show') edits.push({ s: o.s, e: o.e, rep: opText(o) });
+    else edits.push({ s: o.s, e: o.e, rep: '' });
+  }
+  let newRes = null, newX = null;
+  for (const f of node.forms) {
+    if (edits.some(ed => ed.s === node.ops[f.idx].s)) continue;
+    const child = rewriteNode(ctx, f.child, act);
+    if (!child) continue;
+    // new form XObject carrying the cleaned content
+    const old = f.child.xo;
+    const st = ctx.flateStream(child.bytes);
+    for (const [k, v] of old.dict.entries()) {
+      const kn = k.decodeText();
+      if (['Filter', 'DecodeParms', 'Length', 'DL'].includes(kn)) continue;
+      st.dict.set(k, v);
+    }
+    if (child.res !== f.child.res || !f.child.ownRes) st.dict.set(PDFName.of('Resources'), child.res);
+    const ref = ctx.register(st);
+    if (!newRes) {
+      newRes = node.res.clone(ctx);
+      const xd = dget(ctx, node.res, 'XObject');
+      newX = xd instanceof PDFDict ? xd.clone(ctx) : ctx.obj({});
+      newRes.set(PDFName.of('XObject'), newX);
+    }
+    let nm; do { nm = `WmClean${++nameCounter}`; } while (newX.has(PDFName.of(nm)));
+    newX.set(PDFName.of(nm), ref);
+    const o = node.ops[f.idx];
+    edits.push({ s: o.s, e: o.e, rep: `/${nm} Do` });
+  }
+  if (!edits.length) return null;
+  return { bytes: applyEdits(node.bytes, edits), res: newRes || node.res };
+}
+
+/* apply the selected removals to one page of doc; returns true if changed */
+function cleanPage(doc, pageIndex, act) {
+  const ctx = doc.context, node = doc.getPage(pageIndex).node;
+  const a = analyzePage(doc, pageIndex, null);
+  let changed = false;
+  const r = rewriteNode(ctx, a.root, act);
+  if (r) {
+    node.set(PDFName.of('Contents'), ctx.register(ctx.flateStream(r.bytes)));
+    if (r.res !== a.root.res) node.set(PDFName.of('Resources'), r.res);
+    changed = true;
+  }
+  const drop = a.annots.filter(x => act.has(x.g)).map(x => x.k);
+  if (drop.length) {
+    const ann = dget(ctx, node, 'Annots'); const keep = [];
+    for (let k = 0; k < ann.size(); k++) if (!drop.includes(k)) keep.push(ann.get(k));
+    node.set(PDFName.of('Annots'), ctx.obj(keep));
+    changed = true;
+  }
+  return changed;
+}
+
+/* =====================================================================
+   Scanned pages: whiten light shades
+   ===================================================================== */
+function threshold() { return 250 - (+$('strength').value) * 1.5; }   // 50 → 175
+function cleanPixels(img, T, grey) {
+  const d = img.data, lo = T - 40;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum >= T) { r = g = b = 255; }
+    else if (lum > lo) { const f = (lum - lo) / 40; r += (255 - r) * f; g += (255 - g) * f; b += (255 - b) * f; }
+    if (grey) { const v = 0.299 * r + 0.587 * g + 0.114 * b; r = g = b = v; }
+    d[i] = r; d[i + 1] = g; d[i + 2] = b;
+  }
+  return img;
+}
+function drawSwatches() {
+  const T = threshold(), box = $('swatches'); box.innerHTML = '';
+  for (let k = 0; k < 14; k++) {
+    const v = Math.round(255 - k * (255 / 13));
+    const s = document.createElement('span');
+    s.style.background = `rgb(${v},${v},${v})`;
+    if (v >= T) s.className = 'gone';
+    box.appendChild(s);
+  }
+}
+
+/* =====================================================================
+   Loading
+   ===================================================================== */
+const drop = $('drop'), fileInput = $('file');
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+async function loadFile(f) {
+  setMsg('loadMsg', '', ''); setMsg('outMsg', '', ''); $('status').textContent = '';
+  $('fileInfo').textContent = 'Opening…';
+  $('setCard').classList.add('disabled'); $('goCard').classList.add('disabled');
+  try {
+    fileBytes = new Uint8Array(await f.arrayBuffer());
+    fileName = f.name.replace(/\.pdf$/i, '');
+    if (pjsDoc) pjsDoc.destroy();
+    pjsDoc = await pdfjsLib.getDocument({ data: fileBytes.slice() }).promise;
+    numPages = pjsDoc.numPages; cur = 0;
+    encrypted = false; libDoc = null;
+    try { libDoc = await PDFDocument.load(fileBytes, { updateMetadata: false }); }
+    catch (e) { if (/encrypt/i.test(e && (e.name + e.message))) encrypted = true; else throw e; }
+
+    $('fileInfo').innerHTML = `<span class="name"></span> · ${numPages} page${numPages > 1 ? 's' : ''}`;
+    $('fileInfo').querySelector('.name').textContent = f.name;
+    $('fileInfo').append(' · Looking for watermarks…');
+    await new Promise(r => setTimeout(r, 20));
+
+    groups = new Map(); pageInfo = []; active = new Set(); scanSet = new Set(); clearCaches();
+    if (libDoc) {
+      for (let i = 0; i < numPages; i++) {
+        let a;
+        try { a = analyzePage(libDoc, i, groups); }
+        catch (err) { console.warn('page', i + 1, err); a = { stats: { text: 1 }, groups: new Set() }; }
+        const strongHere = [...a.groups].some(k => groups.get(k) && groups.get(k).strong);
+        const scanned = a.stats.bigImage && a.stats.text === 0;
+        pageInfo.push({ groups: a.groups, scanned });
+        if (scanned && !strongHere) scanSet.add(i + 1);
+        if (i % 20 === 19) await new Promise(r => setTimeout(r));
+      }
+      for (const g of groups.values()) if (g.strong) active.add(g.key);
+    } else {
+      for (let i = 0; i < numPages; i++) { pageInfo.push({ groups: new Set(), scanned: true }); scanSet.add(i + 1); }
+    }
+    $('fileInfo').lastChild.remove();
+    renderCands();
+    $('scanPages').value = formatPages(scanSet);
+    applyScanText();
+    if (encrypted) setMsg('loadMsg', 'warn', 'This PDF is protected, so its content can’t be edited directly. Every page will be cleaned as a scan (rebuilt as an image).');
+    $('scanPages').disabled = encrypted;
+    $('setCard').classList.remove('disabled'); $('goCard').classList.remove('disabled');
+    // start on the first page that has something to remove
+    const first = pageInfo.findIndex((p, i) => [...p.groups].some(k => active.has(k)) || scanSet.has(i + 1));
+    cur = first >= 0 ? first : 0;
+    await showPage();
+  } catch (err) {
+    console.error(err);
+    $('fileInfo').textContent = '';
+    setMsg('loadMsg', 'err', /password/i.test(err && err.message)
+      ? 'This PDF needs a password to open. Remove the password first, then try again.'
+      : 'Could not open this file as a PDF.');
+  }
+}
+
+/* ---------- candidate list ---------- */
+function kindTitle(g) {
+  if (g.title) return g.title;
+  if (g.kind === 'text') return g.sample.trim() ? `“${g.sample.trim().slice(0, 50)}${g.sample.length > 50 ? '…' : ''}”` : 'Text (letters can’t be read; press Show to see it)';
+  if (g.kind === 'path') return 'Shapes or outlined text';
+  if (g.kind === 'image') return 'Image (e.g. logo)';
+  return 'Item';
+}
+function renderCands() {
+  const box = $('cands'); box.innerHTML = '';
+  const list = [...groups.values()].sort((x, y) => (y.strong - x.strong) || (y.pages.size - x.pages.size) || (y.n - x.n));
+  if (!list.length) {
+    const d = document.createElement('div'); d.className = 'empty';
+    d.textContent = encrypted ? 'Not available for protected PDFs.'
+      : 'No digital watermark found. If the watermark is part of a scanned image, add those pages to the scan list below.';
+    box.appendChild(d); return;
+  }
+  for (const g of list) {
+    const row = document.createElement('label'); row.className = 'cand' + (active.has(g.key) ? ' on' : '');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = active.has(g.key);
+    const mid = document.createElement('div');
+    const t = document.createElement('div'); t.className = 't'; t.textContent = kindTitle(g);
+    if (g.strong) { const s = document.createElement('span'); s.className = 'tag sug'; s.textContent = 'Likely watermark'; t.appendChild(s); }
+    const d = document.createElement('div'); d.className = 'd';
+    const where = `${g.pages.size === numPages && numPages > 1 ? 'every page' : (g.pages.size === 1 ? 'page ' : 'pages ') + formatPages(g.pages)}`;
+    d.textContent = [g.desc, where].filter(Boolean).join(' · ');
+    mid.append(t, d);
+    const show = document.createElement('button'); show.className = 'link'; show.textContent = 'Show'; show.type = 'button';
+    show.addEventListener('click', e => { e.preventDefault(); cur = Math.min(...g.pages) - 1; view = 'diff'; syncSeg(); showPage(); });
+    cb.addEventListener('change', () => {
+      if (cb.checked) active.add(g.key); else active.delete(g.key);
+      row.classList.toggle('on', cb.checked);
+      showPage();
+    });
+    row.append(cb, mid, show);
+    box.appendChild(row);
+  }
+}
+
+/* ---------- page list helpers ---------- */
+function parsePages(text) {
+  const set = new Set(), bad = [];
+  for (const part of text.split(/[,，;\s]+/).filter(Boolean)) {
+    const m = part.match(/^(\d+)(?:[-–~](\d+))?$/);
+    if (!m) { bad.push(part); continue; }
+    let a = +m[1], b = m[2] ? +m[2] : a;
+    if (a > b) [a, b] = [b, a];
+    if (a < 1 || (numPages && a > numPages)) { bad.push(part); continue; }
+    for (let p = a; p <= Math.min(b, numPages || b); p++) set.add(p);
+  }
+  return { set, bad };
+}
+function formatPages(set) {
+  const list = [...set].sort((a, b) => a - b), out = [];
+  for (let i = 0; i < list.length; i++) {
+    let j = i; while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
+    out.push(j > i ? `${list[i]}-${list[j]}` : `${list[i]}`); i = j;
+  }
+  return out.join(', ');
+}
+function applyScanText() {
+  const { set, bad } = parsePages($('scanPages').value);
+  if (!encrypted) scanSet = set;
+  const hint = $('scanHint');
+  $('scanPages').classList.toggle('bad', bad.length > 0);
+  hint.classList.toggle('bad', bad.length > 0);
+  const auto = pageInfo.filter(p => p.scanned).length;
+  hint.textContent = bad.length ? `Not understood: ${bad.join(', ')}` + (numPages ? ` (this PDF has ${numPages} pages)` : '')
+    : scanSet.size ? `${scanSet.size} page${scanSet.size > 1 ? 's' : ''} will be cleaned as scans.`
+    : auto ? 'Scanned pages with a digital watermark are handled above.' : 'No scanned pages found. Leave blank unless the watermark is part of an image.';
+}
+let st;
+$('scanPages').addEventListener('input', () => { applyScanText(); clearTimeout(st); st = setTimeout(showPage, 300); });
+$('scanPages').addEventListener('change', () => { if (!$('scanPages').classList.contains('bad')) $('scanPages').value = formatPages(scanSet); });
+$('strength').addEventListener('input', () => { drawSwatches(); clearTimeout(st); st = setTimeout(showPage, 120); });
+$('colour').addEventListener('change', showPage);
+drawSwatches();
+
+/* =====================================================================
+   Preview
+   ===================================================================== */
+let renderToken = 0;
+const cache = { before: new Map(), after: new Map() };
+function clearCaches() { cache.before.clear(); cache.after.clear(); }
+
+async function renderToImageData(pdfPage, scale) {
+  const vp = pdfPage.getViewport({ scale });
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+  await pdfPage.render({ canvasContext: cx, viewport: vp }).promise;
+  return cx.getImageData(0, 0, c.width, c.height);
+}
+function activeOnPage(i) { return libDoc ? [...pageInfo[i].groups].filter(k => active.has(k)) : []; }
+
+async function vectorCleanedPageDoc(i) {
+  // a one-page PDF with the ticked watermark items removed
+  const tmp = await PDFDocument.create();
+  const [p] = await tmp.copyPages(libDoc, [i]);
+  tmp.addPage(p);
+  cleanPage(tmp, 0, new Set(activeOnPage(i)));
+  return tmp.save();
+}
+
+async function showPage() {
+  if (!pjsDoc) return;
+  const token = ++renderToken;
+  const i = cur;
+  $('pageLbl').textContent = `Page ${i + 1} of ${numPages}`;
+  $('prev').disabled = i === 0; $('next').disabled = i === numPages - 1;
+  $('busy').style.display = 'block';
+  try {
+    const page = await pjsDoc.getPage(i + 1);
+    const base = page.getViewport({ scale: 1 });
+    const avail = Math.min($('cv').closest('.stage').clientWidth - 24, 620);
+    const cssScale = avail / base.width;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const scale = cssScale * dpr;
+    const sizeKey = scale.toFixed(3);
+
+    let before = cache.before.get(i + '|' + sizeKey);
+    if (!before) { before = await renderToImageData(page, scale); cache.before.set(i + '|' + sizeKey, before); }
+    if (token !== renderToken) return;
+
+    const act = activeOnPage(i);
+    let vec = before;
+    if (act.length) {
+      const k = i + '|' + sizeKey + '|' + act.sort().join(';');
+      vec = cache.after.get(k);
+      if (!vec) {
+        const bytes = await vectorCleanedPageDoc(i);
+        const d = await pdfjsLib.getDocument({ data: bytes }).promise;
+        vec = await renderToImageData(await d.getPage(1), scale);
+        d.destroy();
+        cache.after.set(k, vec);
+      }
+      if (token !== renderToken) return;
+    }
+    const isScan = scanSet.has(i + 1), isScanPage = isScan;
+    let after = vec;
+    if (isScan) {
+      after = new ImageData(new Uint8ClampedArray(vec.data), vec.width, vec.height);
+      cleanPixels(after, threshold(), $('colour').value === 'grey');
+    }
+
+    let out = after;
+    if (view === 'before') out = before;
+    else if (view === 'diff') {
+      out = new ImageData(new Uint8ClampedArray(after.data), after.width, after.height);
+      const o = out.data, b = before.data, W = out.width, H = out.height;
+      if (b.length === o.length) {
+        const lumB = new Float32Array(W * H), lumA = new Float32Array(W * H);
+        for (let p = 0, q = 0; q < W * H; p += 4, q++) {
+          lumB[q] = b[p] * .299 + b[p + 1] * .587 + b[p + 2] * .114;
+          lumA[q] = o[p] * .299 + o[p + 1] * .587 + o[p + 2] * .114;
+        }
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const q = y * W + x, p = q * 4;
+          let removed = lumA[q] - lumB[q] > 18;
+          if (removed && isScanPage) {
+            // ignore the soft edges of writing that is kept
+            for (let dy = -1; dy <= 1 && removed; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const yy = y + dy, xx = x + dx;
+              if (yy >= 0 && yy < H && xx >= 0 && xx < W && lumA[yy * W + xx] < 160) { removed = false; break; }
+            }
+          }
+          if (removed) { o[p] = 228; o[p + 1] = 38; o[p + 2] = 38; }
+          else { const v = 255 - (255 - lumA[q]) * 0.45; o[p] = o[p + 1] = o[p + 2] = v; }   // kept content, faded grey
+        }
+      }
+    }
+    const cv = $('cv');
+    cv.width = out.width; cv.height = out.height;
+    cv.style.width = Math.round(out.width / dpr) + 'px';
+    cv.style.height = Math.round(out.height / dpr) + 'px';
+    cv.getContext('2d').putImageData(out, 0, 0);
+
+    const notes = [];
+    if (act.length) notes.push(`${act.length} watermark item${act.length > 1 ? 's' : ''} removed`);
+    if (isScan) notes.push('cleaned as a scan');
+    if (!notes.length) notes.push('nothing removed on this page');
+    $('pageMode').innerHTML = '';
+    $('pageMode').append('This page: ' + notes.join(', '));
+    if (view === 'diff') { const s = document.createElement('span'); s.className = 'legend'; s.textContent = ' · red = removed, grey = kept'; $('pageMode').append(s); }
+  } catch (err) {
+    console.error(err);
+    $('pageMode').textContent = 'Preview failed: ' + (err && err.message ? err.message : err);
+  } finally {
+    if (token === renderToken) $('busy').style.display = 'none';
+  }
+}
+
+function syncSeg() { document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === view)); }
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; syncSeg(); showPage(); }));
+$('prev').addEventListener('click', () => { if (cur > 0) { cur--; showPage(); } });
+$('next').addEventListener('click', () => { if (cur < numPages - 1) { cur++; showPage(); } });
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { clearCaches(); showPage(); }, 200); });
+
+/* =====================================================================
+   Build the output
+   ===================================================================== */
+$('go').addEventListener('click', async () => {
+  setMsg('outMsg', '', '');
+  if ($('scanPages').classList.contains('bad')) { setMsg('outMsg', 'err', 'Please fix the scanned page list first.'); return; }
+  const btn = $('go'); btn.disabled = true;
+  const bar = $('bar'), fill = bar.firstElementChild;
+  bar.style.display = 'block'; fill.style.width = '0';
+  const progress = (f, t) => { fill.style.width = Math.round(f * 100) + '%'; $('status').textContent = t; };
+  try {
+    let vecPages = 0;
+    let doc;
+    const scans = [...scanSet].sort((a, b) => a - b);
+    if (!encrypted) {
+      progress(0.02, 'Reading PDF…');
+      doc = await PDFDocument.load(fileBytes, { updateMetadata: false });
+      for (let i = 0; i < numPages; i++) {
+        const act = new Set(activeOnPage(i));
+        if (act.size && cleanPage(doc, i, act)) vecPages++;
+        if (i % 10 === 0) { progress(0.05 + 0.35 * i / numPages, `Removing watermark: page ${i + 1} of ${numPages}…`); await new Promise(r => setTimeout(r)); }
+      }
+    } else {
+      doc = await PDFDocument.create();
+      for (let i = 0; i < numPages; i++) doc.addPage([10, 10]);   // placeholders, replaced below
+    }
+
+    if (scans.length) {
+      progress(0.4, 'Preparing scanned pages…');
+      let src = pjsDoc, tmpDoc = null;
+      if (!encrypted && vecPages) { tmpDoc = await pdfjsLib.getDocument({ data: await doc.save() }).promise; src = tmpDoc; }
+      const dpi = +$('dpi').value, T = threshold(), grey = $('colour').value === 'grey';
+      for (let s = 0; s < scans.length; s++) {
+        const i = scans[s] - 1;
+        progress(0.4 + 0.55 * s / scans.length, `Cleaning scanned page ${i + 1} (${s + 1} of ${scans.length})…`);
+        const pg = await src.getPage(i + 1);
+        const base = pg.getViewport({ scale: 1 });
+        const img = cleanPixels(await renderToImageData(pg, dpi / 72), T, grey);
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        c.getContext('2d').putImageData(img, 0, 0);
+        const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        const jpg = await doc.embedJpg(new Uint8Array(await blob.arrayBuffer()));
+        const np = doc.insertPage(i, [base.width, base.height]);
+        np.drawImage(jpg, { x: 0, y: 0, width: base.width, height: base.height });
+        doc.removePage(i + 1);
+        c.width = c.height = 1;
+      }
+      if (tmpDoc) tmpDoc.destroy();
+    }
+    if (!vecPages && !scans.length) { setMsg('outMsg', 'warn', 'Nothing is selected to remove. Tick a watermark above, or list pages to clean as scans.'); return; }
+
+    progress(0.97, 'Saving…');
+    const out = await doc.save();
+    progress(1, '');
+    const name = `${fileName}_no_watermark.pdf`;
+    const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const bits = [];
+    if (vecPages) bits.push(`watermark removed from ${vecPages} page${vecPages > 1 ? 's' : ''}`);
+    if (scans.length) bits.push(`${scans.length} scanned page${scans.length > 1 ? 's' : ''} cleaned`);
+    setMsg('outMsg', 'ok', `Done: ${bits.join(', ')} → ${name}`);
+  } catch (err) {
+    console.error(err);
+    setMsg('outMsg', 'err', 'Something went wrong: ' + (err && err.message ? err.message : err));
+  } finally {
+    $('status').textContent = '';
+    btn.disabled = false; setTimeout(() => { bar.style.display = 'none'; }, 800);
+  }
+});
+
+function setMsg(id, kind, text) { const el = $(id); el.className = 'msg' + (kind ? ' ' + kind : ''); el.textContent = text; }
+</script>
+</body>
+</html>
