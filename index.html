@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teaching Toolbox</title>
+<meta name="description" content="A collection of teaching tools and simulations.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f6feb'/%3E%3Cpath d='M18 26h28v22H18z M24 26v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6' fill='none' stroke='white' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #1f6feb; --accent-soft: #e8f0fe; --chip: #eef1f4;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 6px 18px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #4c8dff; --accent-soft: #1d2a40; --chip: #252d37;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #4c8dff; --accent-soft: #1d2a40; --chip: #252d37;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 40px 16px 64px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px; }
+  .greet { font-size: .95rem; color: var(--muted); margin: 0 0 4px; }
+  h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); margin: 0; letter-spacing: -0.02em; }
+  .tagline { margin: 6px 0 0; color: var(--muted); }
+  .search { position: relative; width: min(320px, 100%); }
+  @media (max-width: 600px) { .search { width: 100%; } }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .search input {
+    width: 100%; font: inherit; padding: 10px 12px 10px 38px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  section.cat { margin-top: 36px; }
+  .cat h2 {
+    font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+  a.tool {
+    display: flex; gap: 16px; align-items: flex-start; text-decoration: none; color: inherit;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+    box-shadow: var(--shadow); transition: transform .15s, border-color .15s, box-shadow .15s;
+  }
+  a.tool:hover, a.tool:focus-visible { transform: translateY(-2px); border-color: var(--c); outline: none; }
+  .icon {
+    flex: none; width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center;
+    background: var(--c); color: #fff;
+  }
+  .icon svg { width: 30px; height: 30px; }
+  .tool h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .tool p { margin: 0; color: var(--muted); font-size: .9rem; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { font-size: .75rem; background: var(--chip); color: var(--muted); padding: 2px 8px; border-radius: 999px; }
+  .tag.new { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  .empty { margin-top: 36px; color: var(--muted); text-align: center; display: none; }
+  footer { margin-top: 48px; font-size: .82rem; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="greet" id="greet">Welcome</p>
+      <h1>Teaching Toolbox</h1>
+      <p class="tagline">Tools and simulations for the classroom and the staff room.</p>
+    </div>
+    <label class="search" aria-label="Search tools">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="q" placeholder="Search tools…" autocomplete="off">
+    </label>
+  </header>
+
+  <main id="list"></main>
+  <p class="empty" id="empty">No tools match your search.</p>
+
+  <footer>All tools run in your browser. Files you open are never uploaded.</footer>
+</div>
+
+<script>
+/* =========================================================
+   TOOL LIST: add new tools here.
+   category: the section heading the tool appears under
+   icon:     a key from ICONS below
+   color:    the icon tile colour
+   added:    YYYY-MM-DD (shows a "New" tag for 14 days)
+   ========================================================= */
+const TOOLS = [
+  {
+    title: 'Answer Booklet Reorganizer',
+    desc: 'Scanned scripts in student order → page order, for marking question by question.',
+    href: 'pdf-reorganizer.html',
+    category: 'Exam & Marking',
+    icon: 'shuffle',
+    color: '#1f6feb',
+    tags: ['PDF', 'Before marking'],
+    added: '2026-10-10'
+  },
+  {
+    title: 'Marked Paper Returner',
+    desc: 'Marked scripts in page order → back to student order, with one file per student (01_XXX…).',
+    href: 'pdf-return-to-students.html',
+    category: 'Exam & Marking',
+    icon: 'return',
+    color: '#0f7b6c',
+    tags: ['PDF', 'After marking'],
+    added: '2026-10-11'
+  }
+];
+
+const ICONS = {
+  shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="10" rx="1.5"/><path d="M5.5 6.5h3M5.5 9h3"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><path d="M15.5 14.5h3M15.5 17h3"/><path d="M14 4h4a2 2 0 0 1 2 2v2.5"/><path d="m18 7 2 2 2-2"/><path d="M10 20H6a2 2 0 0 1-2-2v-2.5"/><path d="m6 17-2-2-2 2"/></svg>',
+  return:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/></svg>',
+  atom:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1.8" fill="currentColor"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(120 12 12)"/></svg>',
+  chart:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V4M4 20h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></svg>',
+  wave:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12c2.5-6 5-6 7.5 0s5 6 7.5 0 3.5-4 5-2"/></svg>',
+  bolt:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  tool:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>'
+};
+
+/* ---------- rendering ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isNew = d => d && (Date.now() - new Date(d + 'T00:00:00+08:00')) < 14 * 864e5;
+
+function render(filter) {
+  const q = (filter || '').trim().toLowerCase();
+  const list = document.getElementById('list');
+  const shown = TOOLS.filter(t => !q ||
+    [t.title, t.desc, t.category, ...(t.tags || [])].join(' ').toLowerCase().includes(q));
+  const cats = [...new Set(shown.map(t => t.category))];
+  list.innerHTML = cats.map(cat => `
+    <section class="cat">
+      <h2>${esc(cat)}</h2>
+      <div class="grid">
+        ${shown.filter(t => t.category === cat).map(t => `
+          <a class="tool" href="${esc(t.href)}" style="--c:${esc(t.color || '#1f6feb')}">
+            <div class="icon">${ICONS[t.icon] || ICONS.tool}</div>
+            <div>
+              <h3>${esc(t.title)}</h3>
+              <p>${esc(t.desc)}</p>
+              <div class="tags">
+                ${isNew(t.added) ? '<span class="tag new">New</span>' : ''}
+                ${(t.tags || []).map(g => `<span class="tag">${esc(g)}</span>`).join('')}
+              </div>
+            </div>
+          </a>`).join('')}
+      </div>
+    </section>`).join('');
+  document.getElementById('empty').style.display = shown.length ? 'none' : 'block';
+}
+
+const h = new Date().getHours();
+document.getElementById('greet').textContent =
+  h < 12 ? 'Good morning 👋' : h < 18 ? 'Good afternoon 👋' : 'Good evening 👋';
+
+document.getElementById('q').addEventListener('input', e => render(e.target.value));
+render();
+</script>
+</body>
+</html>
