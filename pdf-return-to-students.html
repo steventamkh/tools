@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marked Paper Returner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #0f7b6c; --accent-ink: #ffffff; --accent-soft: #e3f4f1;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --chip: #eef1f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #3cc4ae; --accent-ink: #08201c; --accent-soft: #163330;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #3cc4ae; --accent-ink: #08201c; --accent-soft: #163330;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  .step {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 700; flex: none;
+  }
+  .card.disabled { opacity: .5; pointer-events: none; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  #fileInfo { margin-top: 12px; font-size: .95rem; }
+  #fileInfo .name { font-weight: 600; word-break: break-all; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input[type=number], input[type=text] {
+    width: 100%; font: inherit; font-size: 1.1rem; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .namefield { display: flex; align-items: stretch; }
+  .namefield .prefix {
+    display: grid; place-items: center; padding: 0 12px; font-size: 1.1rem; font-variant-numeric: tabular-nums;
+    border: 1px solid var(--line); border-right: 0; border-radius: 10px 0 0 10px; background: var(--chip); color: var(--muted);
+  }
+  .namefield input { border-radius: 0 10px 10px 0; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .msg { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg:empty { display: none; }
+  .preview { font-size: .88rem; color: var(--muted); }
+  .preview .row { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); }
+  .preview .row:first-child { border-top: 0; }
+  .preview .lbl { flex: none; width: 92px; font-weight: 600; color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { background: var(--chip); border-radius: 6px; padding: 1px 7px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .files { margin-top: 12px; font-size: .88rem; }
+  .files .chip { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .82rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .sub { font-size: .9rem; font-weight: 600; margin: 18px 0 8px; }
+  #status { margin-top: 12px; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  .bar { height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  footer { margin-top: 28px; font-size: .82rem; color: var(--muted); }
+  footer ol { padding-left: 18px; margin: 6px 0 0; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Marked Paper Returner</h1>
+    <p>Turn marked scripts ordered <b>page → student</b> back into <b>student → page</b>, ready to return to each student.</p>
+    <div class="privacy">🔒 Runs entirely in your browser. Files are never uploaded.</div>
+  </header>
+
+  <section class="card" id="card1">
+    <h2><span class="step">1</span>Choose the marked PDF</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose PDF file">
+      <strong>Click to choose</strong> or drag the PDF here
+      <small>Page 1 of every student, then Page 2 of every student, …</small>
+    </div>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div id="fileInfo"></div>
+  </section>
+
+  <section class="card disabled" id="card2">
+    <h2><span class="step">2</span>Tell me the layout</h2>
+    <div class="grid">
+      <div>
+        <label for="students">Number of students</label>
+        <input type="number" id="students" min="1" step="1" inputmode="numeric" placeholder="e.g. 32">
+      </div>
+      <div>
+        <label for="pages">Pages per student</label>
+        <input type="number" id="pages" min="1" step="1" inputmode="numeric" placeholder="e.g. 8">
+      </div>
+    </div>
+    <div class="msg" id="check"></div>
+  </section>
+
+  <section class="card disabled" id="card3">
+    <h2><span class="step">3</span>Check the new order</h2>
+    <div class="preview" id="preview"></div>
+  </section>
+
+  <section class="card disabled" id="card4">
+    <h2><span class="step">4</span>Download</h2>
+
+    <div class="sub">Option A · One PDF with all students</div>
+    <div class="actions">
+      <button id="btnMerged">Download reorganized PDF</button>
+    </div>
+
+    <div class="sub">Option B · One PDF per student (.zip)</div>
+    <label for="suffix">File name: class number + your text</label>
+    <div class="namefield">
+      <span class="prefix">01_</span>
+      <input type="text" id="suffix" placeholder="e.g. 5A_Physics_UT1" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="hint">Characters not allowed in file names ( \ / : * ? " &lt; &gt; | ) are replaced with “-”.</div>
+    <div class="files" id="files"></div>
+    <div class="actions" style="margin-top:12px">
+      <button id="btnSplit" class="secondary" disabled>Download one PDF per student (.zip)</button>
+    </div>
+
+    <div class="bar" id="bar"><div></div></div>
+    <div id="status"></div>
+  </section>
+
+  <footer>
+    How it works:
+    <ol>
+      <li>Input: Page 1 of Students 1…S, then Page 2 of Students 1…S, and so on. This is the order the <a href="pdf-reorganizer.html">Answer Booklet Reorganizer</a> produces.</li>
+      <li>Output: Student 1 pages 1…P, then Student 2 pages 1…P, and so on.</li>
+      <li>Option B names each file by class number: 01_<i>text</i>.pdf, 02_<i>text</i>.pdf, …</li>
+    </ol>
+  </footer>
+</div>
+
+<script>
+/* ---------- core ordering (pure, testable) ---------- */
+// Input (page-major), 0-based: page p, student s  ->  p * S + s
+// Output position for every student, student-major.
+function studentMajorOrder(S, P) {
+  const order = [];
+  for (let s = 0; s < S; s++)
+    for (let p = 0; p < P; p++) order.push(p * S + s);
+  return order;
+}
+// Input indices for one student s (0-based), all pages in order.
+function studentGroup(S, P, s) {
+  const out = [];
+  for (let p = 0; p < P; p++) out.push(p * S + s);
+  return out;
+}
+function cleanSuffix(t) {
+  return t.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').replace(/^\.+/, '');
+}
+function studentFileName(s, S, suffix) {
+  const pad = Math.max(2, String(S).length);
+  return String(s + 1).padStart(pad, '0') + '_' + suffix + '.pdf';
+}
+
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+const state = { bytes: null, name: '', total: 0, S: 0, P: 0 };
+
+function setCard(id, on) { $(id).classList.toggle('disabled', !on); }
+function setStatus(text, pct) {
+  $('status').textContent = text || '';
+  const bar = $('bar');
+  if (pct == null) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  bar.firstElementChild.style.width = Math.round(pct * 100) + '%';
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+if (!window.PDFLib) {
+  $('fileInfo').innerHTML = '<div class="msg err">The PDF library could not load. Please check your internet connection and reload the page.</div>';
+}
+
+const drop = $('drop'), fileInput = $('file');
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+async function loadFile(file) {
+  const info = $('fileInfo');
+  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+    info.innerHTML = '<div class="msg err">Please choose a PDF file.</div>'; return;
+  }
+  info.textContent = 'Reading ' + file.name + ' …';
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+    state.bytes = bytes;
+    state.name = file.name.replace(/\.pdf$/i, '').replace(/_by-page$/i, '');
+    state.total = doc.getPageCount();
+    info.innerHTML = '<span class="name"></span><br><b>' + state.total + '</b> pages · ' +
+      (file.size / 1048576).toFixed(1) + ' MB';
+    info.querySelector('.name').textContent = file.name;
+    setCard('card2', true);
+    validate();
+    $('students').focus();
+  } catch (err) {
+    console.error(err);
+    info.innerHTML = '<div class="msg err">Could not open this PDF. It may be damaged or password-protected.</div>';
+  }
+}
+
+const sIn = $('students'), pIn = $('pages'), xIn = $('suffix');
+let lastEdited = null;
+sIn.addEventListener('input', () => { lastEdited = 's'; autofill(); validate(); });
+pIn.addEventListener('input', () => { lastEdited = 'p'; autofill(); validate(); });
+xIn.addEventListener('input', renderFiles);
+xIn.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('btnSplit').disabled) $('btnSplit').click(); });
+
+function autofill() {
+  const T = state.total, s = +sIn.value, p = +pIn.value;
+  if (!T) return;
+  if (lastEdited === 's' && s > 0 && T % s === 0) pIn.value = T / s;
+  if (lastEdited === 'p' && p > 0 && T % p === 0) sIn.value = T / p;
+}
+
+function validate() {
+  const T = state.total;
+  const S = parseInt(sIn.value, 10), P = parseInt(pIn.value, 10);
+  const box = $('check');
+  let ok = false;
+  if (!T || !(S > 0) || !(P > 0)) { box.className = 'msg'; box.textContent = ''; }
+  else if (S * P === T) {
+    box.className = 'msg ok';
+    box.textContent = '✓ ' + S + ' students × ' + P + ' pages = ' + T + ' pages. Matches the file.';
+    ok = true;
+  } else {
+    box.className = 'msg err';
+    box.textContent = S + ' × ' + P + ' = ' + (S * P) + ', but the file has ' + T +
+      ' pages. Check for a missing or extra page before continuing.';
+  }
+  state.S = ok ? S : 0; state.P = ok ? P : 0;
+  setCard('card3', ok); setCard('card4', ok);
+  renderPreview(); renderFiles();
+}
+
+function renderPreview() {
+  const { S, P } = state, el = $('preview');
+  if (!S || !P) { el.innerHTML = '<span>Enter the numbers above to see the new order.</span>'; return; }
+  const show = [];
+  for (let s = 0; s < Math.min(S, 3); s++) show.push(s);
+  if (S > 3) show.push(S - 1);
+  const maxChips = 12;
+  let html = '';
+  show.forEach((s, i) => {
+    if (i === 3 && S > 4) html += '<div class="row"><span class="lbl">…</span></div>';
+    const idx = studentGroup(S, P, s);
+    const chips = idx.slice(0, maxChips).map(x => '<span class="chip">' + (x + 1) + '</span>').join('');
+    const more = P > maxChips ? '<span class="chip">… ' + (idx[P - 1] + 1) + '</span>' : '';
+    html += '<div class="row"><span class="lbl">Student ' + (s + 1) + '</span>' +
+      '<div><div>New pages ' + (s * P + 1) + '–' + ((s + 1) * P) + ' ← marked-file pages:</div>' +
+      '<div class="chips">' + chips + more + '</div></div></div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderFiles() {
+  const { S } = state;
+  const suffix = cleanSuffix(xIn.value);
+  const pad = Math.max(2, String(S || 1).length);
+  document.querySelector('.namefield .prefix').textContent = '0'.repeat(pad - 1) + '1_';
+  const btn = $('btnSplit'), el = $('files');
+  btn.disabled = !(S && suffix);
+  if (!S) { el.innerHTML = ''; return; }
+  if (!suffix) { el.innerHTML = '<span style="color:var(--muted)">Type the text above to see the file names.</span>'; return; }
+  const names = [0, 1].filter(s => s < S).map(s => studentFileName(s, S, suffix));
+  if (S > 3) names.push('…');
+  if (S > 2) names.push(studentFileName(S - 1, S, suffix));
+  el.innerHTML = '<div class="chips"></div>';
+  names.forEach(n => {
+    const c = document.createElement('span'); c.className = 'chip'; c.textContent = n;
+    el.firstElementChild.appendChild(c);
+  });
+}
+
+async function buildDoc(src, indices) {
+  const out = await PDFLib.PDFDocument.create();
+  const pages = await out.copyPages(src, indices);
+  pages.forEach(pg => out.addPage(pg));
+  return out;
+}
+function download(bytes, filename, type) {
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function busy(on) {
+  $('btnMerged').disabled = on;
+  $('btnSplit').disabled = on || !(state.S && cleanSuffix(xIn.value));
+}
+
+$('btnMerged').addEventListener('click', async () => {
+  const { S, P } = state; if (!S) return;
+  busy(true);
+  try {
+    setStatus('Reorganizing ' + (S * P) + ' pages…', 0.2); await tick();
+    const src = await PDFLib.PDFDocument.load(state.bytes, { ignoreEncryption: true });
+    const out = await buildDoc(src, studentMajorOrder(S, P));
+    setStatus('Saving…', 0.7); await tick();
+    const fname = state.name + '_by-student.pdf';
+    download(await out.save(), fname, 'application/pdf');
+    setStatus('Done ✓ Saved as ' + fname);
+  } catch (err) {
+    console.error(err); setStatus('Something went wrong: ' + err.message);
+  } finally { busy(false); }
+});
+
+$('btnSplit').addEventListener('click', async () => {
+  const { S, P } = state;
+  const suffix = cleanSuffix(xIn.value);
+  if (!S || !suffix) return;
+  if (!window.JSZip) { setStatus('The ZIP library could not load. Please reload the page.'); return; }
+  busy(true);
+  try {
+    const src = await PDFLib.PDFDocument.load(state.bytes, { ignoreEncryption: true });
+    const zip = new JSZip();
+    for (let s = 0; s < S; s++) {
+      setStatus('Building ' + studentFileName(s, S, suffix) + ' (' + (s + 1) + ' of ' + S + ')…', s / (S + 1));
+      await tick();
+      const out = await buildDoc(src, studentGroup(S, P, s));
+      zip.file(studentFileName(s, S, suffix), await out.save());
+    }
+    setStatus('Zipping…', S / (S + 1)); await tick();
+    const blob = await zip.generateAsync({ type: 'uint8array' });
+    const zname = suffix + '_by-student.zip';
+    download(blob, zname, 'application/zip');
+    setStatus('Done ✓ ' + S + ' files saved in ' + zname);
+  } catch (err) {
+    console.error(err); setStatus('Something went wrong: ' + err.message);
+  } finally { busy(false); }
+});
+
+renderPreview();
+</script>
+</body>
+</html>
