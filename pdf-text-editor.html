@@ -1,0 +1,2588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Text Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #1f6feb; --accent-ink: #ffffff; --accent-soft: #e5efff;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --warn: #9a6700; --warn-soft: #fff4d6;
+    --chip: #eef1f4; --desk: #e4e8ed; --box: rgba(31, 111, 235, .10); --box-line: rgba(31, 111, 235, .55);
+    --edited: rgba(26, 127, 55, .14); --edited-line: rgba(26, 127, 55, .75);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #6ea8ff; --accent-ink: #0b1a33; --accent-soft: #1a2a44;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+      --chip: #252d37; --desk: #0d1116; --box: rgba(110, 168, 255, .14); --box-line: rgba(110, 168, 255, .7);
+      --edited: rgba(92, 194, 122, .16); --edited-line: rgba(92, 194, 122, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #6ea8ff; --accent-ink: #0b1a33; --accent-soft: #1a2a44;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+    --chip: #252d37; --desk: #0d1116; --box: rgba(110, 168, 255, .14); --box-line: rgba(110, 168, 255, .7);
+    --edited: rgba(92, 194, 122, .16); --edited-line: rgba(92, 194, 122, .8);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 16px 64px; }
+  .home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 760px; }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); }
+  .msg:empty { display: none; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.ghost { background: var(--chip); color: var(--ink); font-weight: 500; }
+  button.small { padding: 5px 10px; font-size: .82rem; border-radius: 8px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input[type=text] {
+    width: 100%; font: inherit; font-size: 1rem; padding: 8px 11px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label.check { display: inline-flex; align-items: center; gap: 7px; font-size: .88rem; cursor: pointer; }
+
+  /* ---- editor ---- */
+  #editor { display: none; margin-top: 20px; }
+  #editor.on { display: block; }
+  .toolbar {
+    position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px;
+  }
+  .toolbar .fname { font-weight: 600; word-break: break-all; min-width: 0; flex: 1 1 200px; font-size: .95rem; }
+  .toolbar .fname small { display: block; font-weight: 400; color: var(--muted); font-size: .8rem; }
+  .zoom { display: inline-flex; align-items: center; gap: 4px; background: var(--chip); border-radius: 10px; padding: 3px; }
+  .zoom button { background: transparent; color: var(--ink); padding: 4px 10px; font-size: 1rem; line-height: 1; }
+  .zoom span { min-width: 46px; text-align: center; font-size: .85rem; font-variant-numeric: tabular-nums; }
+  @media (max-width: 600px) { .toolbar { position: static; } }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; margin-top: 14px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .desk { background: var(--desk); border-radius: 14px; padding: 16px; min-height: 300px; overflow-x: auto; }
+  .page { position: relative; margin: 0 auto 16px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .page canvas { display: block; width: 100%; height: 100%; }
+  .page .num { position: absolute; left: -2px; top: -2px; transform: translateY(-100%); font-size: .75rem; color: var(--muted); }
+  .page .busy { position: absolute; inset: 0; display: none; place-items: center; background: rgba(255,255,255,.35); font-size: .85rem; color: #333; }
+  .page.updating .busy { display: grid; }
+  .page .note { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--warn-soft); color: var(--warn); font-size: .82rem; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+  .ov { position: absolute; inset: 0; }
+  .tb {
+    position: absolute; border-radius: 2px; cursor: text; border: 1px solid transparent;
+  }
+  .ov.show .tb { border-color: var(--box-line); border-style: dashed; background: transparent; }
+  .tb:hover, .tb.active { background: var(--box); border-color: var(--box-line); border-style: solid; }
+  .tb.edited { background: var(--edited); border-bottom: 2px solid var(--edited-line); }
+  .tb.hit { background: rgba(255, 196, 0, .35); border-color: rgba(200, 140, 0, .9); border-style: solid; }
+
+  .pop {
+    position: absolute; z-index: 20; width: min(560px, calc(100vw - 48px)); background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.22);
+  }
+  .pop .meta { font-size: .78rem; color: var(--muted); margin-bottom: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .pop .meta b { color: var(--ink); font-weight: 600; }
+  .pop .orig { font-size: .8rem; color: var(--muted); margin-top: 6px; word-break: break-all; }
+  .pop .status { margin-top: 8px; font-size: .86rem; display: grid; gap: 6px; }
+  .pop .status > div { padding: 7px 10px; border-radius: 8px; }
+  .st-ok { background: var(--ok-soft); color: var(--ok); }
+  .st-warn { background: var(--warn-soft); color: var(--warn); }
+  .st-err { background: var(--err-soft); color: var(--err); }
+  .st-info { background: var(--chip); color: var(--muted); }
+  .status .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .status .acts button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+  .chars { font-weight: 700; letter-spacing: .05em; }
+  .pop .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .pop .row .sp { flex: 1; }
+
+  .side { position: sticky; top: 76px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  @media (max-width: 900px) { .side { position: static; } }
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; background: transparent; color: var(--muted); border-radius: 0; padding: 10px 6px; font-size: .86rem; border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabp { padding: 14px; max-height: calc(100vh - 160px); overflow-y: auto; display: none; }
+  .tabp.on { display: block; }
+  .empty { color: var(--muted); font-size: .88rem; }
+  .elist { display: grid; gap: 8px; }
+  .eitem { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .85rem; }
+  .eitem .pg { color: var(--muted); font-size: .75rem; }
+  .eitem del { color: var(--err); text-decoration: line-through; overflow-wrap: anywhere; }
+  .eitem ins { color: var(--ok); text-decoration: none; overflow-wrap: anywhere; display: block; }
+  .eitem .acts { display: flex; gap: 6px; margin-top: 6px; }
+  .field { margin-top: 10px; }
+  .field:first-child { margin-top: 0; }
+  .field label.lbl { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  .flist { display: grid; gap: 8px; margin-top: 10px; }
+  .fitem { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .84rem; }
+  .fitem .nm { font-weight: 600; word-break: break-all; }
+  .fitem .ty { color: var(--muted); font-size: .78rem; }
+  .fitem .lc { font-size: .78rem; margin-top: 2px; }
+  .lc.yes { color: var(--ok); }
+  .lc.no { color: var(--muted); }
+  .sec { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
+  .sec:first-child { margin-top: 0; }
+  select { font: inherit; font-size: .88rem; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .matches { display: grid; gap: 4px; margin-top: 10px; font-size: .82rem; }
+  .matches div { padding: 5px 8px; border-radius: 7px; background: var(--chip); cursor: pointer; word-break: break-all; }
+  .matches div.bad { background: var(--err-soft); color: var(--err); }
+  #status { font-size: .85rem; color: var(--muted); min-height: 1.3em; }
+  footer { margin-top: 28px; font-size: .82rem; color: var(--muted); }
+  footer ol { padding-left: 18px; margin: 6px 0 0; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>PDF Text Editor</h1>
+    <p>Click any line of text in a PDF and retype it. The tool reuses the fonts already inside the PDF, so the new text matches. Works for English, Chinese and numbers.</p>
+    <div class="privacy">🔒 Your PDF stays on this device — nothing is uploaded.</div>
+  </header>
+
+  <section class="card" id="pick">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a PDF">
+      <div><strong>Choose a PDF</strong> or drop it here</div>
+      <div class="hint">PDFs made from Word, Google Docs or other software. Scanned pages are pictures and can't be edited.</div>
+    </div>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div class="msg" id="loadMsg"></div>
+  </section>
+
+  <section id="editor">
+    <div class="toolbar">
+      <div class="fname" id="fname"></div>
+      <label class="check"><input type="checkbox" id="showAll"> Show editable text</label>
+      <div class="zoom">
+        <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+        <span id="zoomVal">100%</span>
+        <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+      </div>
+      <button class="ghost" id="undoBtn" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button class="ghost" id="newBtn">Open another</button>
+      <button id="dlBtn" disabled>Download PDF</button>
+    </div>
+    <div id="status" style="margin-top:8px"></div>
+    <div class="layout">
+      <div class="desk" id="desk"></div>
+      <aside class="side">
+        <div class="tabs" role="tablist">
+          <button class="on" data-tab="edits">Changes <span id="editCount"></span></button>
+          <button data-tab="find">Find &amp; replace</button>
+          <button data-tab="fonts">Fonts</button>
+        </div>
+        <div class="tabp on" id="tab-edits">
+          <div class="empty" id="editsEmpty">Click a line on the page to change it. Your changes will be listed here.</div>
+          <div class="elist" id="elist"></div>
+        </div>
+        <div class="tabp" id="tab-find">
+          <div class="field"><label class="lbl" for="findIn">Find</label><input type="text" id="findIn" autocomplete="off"></div>
+          <div class="field"><label class="lbl" for="replIn">Replace with</label><input type="text" id="replIn" autocomplete="off"></div>
+          <div class="field" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <label class="check"><input type="checkbox" id="caseIn"> Match case</label>
+            <span class="sp" style="flex:1"></span>
+            <button class="small" id="replAll" disabled>Replace all</button>
+          </div>
+          <div class="hint" id="findInfo"></div>
+          <div class="matches" id="matches"></div>
+        </div>
+        <div class="tabp" id="tab-fonts">
+          <div class="sec">Fonts from your computer</div>
+          <div style="display:grid;gap:8px">
+            <button class="secondary small" id="localBtn" hidden>Find matching fonts on this computer</button>
+            <button class="ghost small" id="fontFileBtn">Load a font file (.ttf, .otf, .ttc)…</button>
+            <input type="file" id="fontFile" accept=".ttf,.otf,.ttc,font/ttf,font/otf,font/collection" multiple hidden>
+            <div id="localPickWrap" hidden>
+              <label class="lbl" for="localPick" style="font-size:.8rem;color:var(--muted)">Add any installed font</label>
+              <select id="localPick"></select>
+            </div>
+          </div>
+          <div class="flist" id="xlist"></div>
+          <div class="hint">Windows Chinese fonts live in <b>C:\Windows\Fonts</b>: 新細明體 <code>mingliu.ttc</code>, 標楷體 <code>kaiu.ttf</code>, 微軟正黑體 <code>msjh.ttc</code>.</div>
+          <div class="sec" style="margin-top:16px">Fonts in this PDF</div>
+          <div class="hint" style="margin-top:0">Most PDFs only carry the letters they already use. New letters come from another font in the PDF, the same font on your computer, or a look-alike.</div>
+          <div class="flist" id="flist"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <footer>
+    <b>How it works</b>
+    <ol>
+      <li>Click a highlighted line, type your change, press <b>Enter</b>. Unchanged letters stay exactly where they were.</li>
+      <li>Letters that are already somewhere in the PDF are drawn with the PDF's own font. A message tells you if any letter has to come from elsewhere.</li>
+      <li>Download the edited PDF. Text stays real text (searchable, selectable).</li>
+    </ol>
+    Limits: text doesn't re-flow into the next line; scanned pages and password-protected PDFs can't be edited.
+  </footer>
+</div>
+
+<script>
+/* ===================== TrueType / OpenType reading, subsetting ===================== */
+const Sfnt = (() => {
+  const tag4 = (dv, o) => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+
+  function count(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return tag4(dv, 0) === 'ttcf' ? dv.getUint32(8) : 1;
+  }
+
+  function decodeName(bytes, platform) {
+    if (platform === 0 || platform === 3) {
+      let s = '';
+      for (let i = 0; i + 1 < bytes.length; i += 2) s += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
+      return s;
+    }
+    try { return new TextDecoder('macintosh').decode(bytes); } catch (e) { return String.fromCharCode(...bytes); }
+  }
+
+  function open(bytes, index = 0) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let off = 0;
+    if (tag4(dv, 0) === 'ttcf') {
+      const n = dv.getUint32(8);
+      if (index >= n) throw new Error('Font index out of range');
+      off = dv.getUint32(12 + 4 * index);
+    }
+    const ver = dv.getUint32(off);
+    if (ver !== 0x00010000 && ver !== 0x4F54544F && ver !== 0x74727565) throw new Error('Not a TrueType/OpenType font');
+    const numTables = dv.getUint16(off + 4);
+    const tables = {};
+    for (let i = 0; i < numTables; i++) {
+      const r = off + 12 + 16 * i;
+      tables[tag4(dv, r)] = { offset: dv.getUint32(r + 8), length: dv.getUint32(r + 12) };
+    }
+    const need = t => { if (!tables[t]) throw new Error('Font has no ' + t + ' table'); return tables[t].offset; };
+    const f = { bytes, dv, tables, index };
+    const head = need('head');
+    f.upem = dv.getUint16(head + 18) || 1000;
+    f.bbox = [dv.getInt16(head + 36), dv.getInt16(head + 38), dv.getInt16(head + 40), dv.getInt16(head + 42)];
+    f.locFormat = dv.getInt16(head + 50);
+    f.macStyle = dv.getUint16(head + 44);
+    f.numGlyphs = dv.getUint16(need('maxp') + 4);
+    const hhea = need('hhea');
+    f.ascender = dv.getInt16(hhea + 4);
+    f.descender = dv.getInt16(hhea + 6);
+    f.numHMetrics = dv.getUint16(hhea + 34);
+    f.hmtx = need('hmtx');
+    f.isCFF = !!tables['CFF '];
+    f.capHeight = f.ascender * 0.7;
+    f.weight = 400; f.italicAngle = 0; f.fsType = 0;
+    if (tables['OS/2']) {
+      const o = tables['OS/2'].offset;
+      f.weight = dv.getUint16(o + 4);
+      f.fsType = dv.getUint16(o + 8);
+      const v = dv.getUint16(o);
+      if (tables['OS/2'].length >= 78) { f.ascender = dv.getInt16(o + 68) || f.ascender; f.descender = dv.getInt16(o + 70) || f.descender; }
+      if (v >= 2 && tables['OS/2'].length >= 90) f.capHeight = dv.getInt16(o + 88) || f.capHeight;
+    }
+    if (tables.post) f.italicAngle = dv.getInt32(tables.post.offset + 4) / 65536;
+    f.bold = f.weight >= 600 || !!(f.macStyle & 1);
+    f.italic = !!(f.macStyle & 2) || f.italicAngle !== 0;
+    // names
+    f.names = {};
+    if (tables.name) {
+      const o = tables.name.offset, cnt = dv.getUint16(o + 2), stor = o + dv.getUint16(o + 4);
+      const best = {};
+      for (let i = 0; i < cnt; i++) {
+        const r = o + 6 + 12 * i;
+        const pid = dv.getUint16(r), eid = dv.getUint16(r + 2), lang = dv.getUint16(r + 4), nid = dv.getUint16(r + 6);
+        const len = dv.getUint16(r + 8), so = dv.getUint16(r + 10);
+        if (![1, 2, 4, 6, 16, 17].includes(nid)) continue;
+        if (pid === 3 && eid !== 1 && eid !== 10 && eid !== 0) continue;
+        const raw = bytes.subarray(stor + so, stor + so + len);
+        const s = decodeName(raw, pid).replace(/\0/g, '').trim();
+        if (!s) continue;
+        const en = (pid === 3 && lang === 0x409) || (pid === 1 && lang === 0);
+        const zh = pid === 3 && [0x404, 0xC04, 0x1404, 0x804, 0x1004].includes(lang);
+        if (en) { if (!best[nid] || best[nid].rank > 0) best[nid] = { s, rank: 0 }; }
+        else if (!best[nid]) best[nid] = { s, rank: 2 };
+        if (zh && !best['zh' + nid]) best['zh' + nid] = { s };
+      }
+      f.names.family = (best[16] || best[1] || {}).s || '';
+      f.names.full = (best[4] || {}).s || f.names.family;
+      f.names.ps = (best[6] || {}).s || f.names.full.replace(/\s+/g, '');
+      f.names.zhFamily = (best.zh16 || best.zh1 || {}).s || '';
+      f.names.zhFull = (best.zh4 || {}).s || '';
+    }
+    readCmap(f);
+    return f;
+  }
+
+  function readCmap(f) {
+    const { dv, tables } = f;
+    f.lookup = () => 0;
+    f.forEachMapping = () => {};
+    if (!tables.cmap) return;
+    const base = tables.cmap.offset, n = dv.getUint16(base + 2);
+    const subs = [];
+    for (let i = 0; i < n; i++) {
+      const r = base + 4 + 8 * i;
+      const pid = dv.getUint16(r), eid = dv.getUint16(r + 2), o = base + dv.getUint32(r + 4);
+      subs.push({ pid, eid, o, fmt: dv.getUint16(o) });
+    }
+    const score = s => {
+      if (s.fmt === 12 && (s.pid === 3 && s.eid === 10 || s.pid === 0)) return 0;
+      if (s.fmt === 4 && s.pid === 3 && s.eid === 1) return 1;
+      if (s.fmt === 4 && s.pid === 0) return 2;
+      if (s.fmt === 6 && (s.pid === 3 && s.eid === 1 || s.pid === 0)) return 3;
+      if (s.fmt === 4 && s.pid === 3 && s.eid === 0) return 4;
+      if ((s.fmt === 0 || s.fmt === 6) && s.pid === 1 && s.eid === 0) return 5;
+      return 99;
+    };
+    subs.sort((a, b) => score(a) - score(b));
+    const s = subs[0];
+    if (!s || score(s) === 99) return;
+    f.cmapKind = score(s) === 4 ? 'symbol' : score(s) === 5 ? 'mac' : 'unicode';
+    const o = s.o;
+    if (s.fmt === 4) {
+      const segX2 = dv.getUint16(o + 6), seg = segX2 / 2;
+      const ends = o + 14, starts = ends + segX2 + 2, deltas = starts + segX2, ranges = deltas + segX2;
+      const glyphAt = (i, c) => {
+        const ro = dv.getUint16(ranges + 2 * i), d = dv.getInt16(deltas + 2 * i);
+        if (!ro) return (c + d) & 0xFFFF;
+        const p = ranges + 2 * i + ro + 2 * (c - dv.getUint16(starts + 2 * i));
+        if (p + 2 > dv.byteLength) return 0;
+        const g = dv.getUint16(p);
+        return g ? (g + d) & 0xFFFF : 0;
+      };
+      f.lookup = c => {
+        if (c > 0xFFFF) return 0;
+        let lo = 0, hi = seg - 1;
+        while (lo <= hi) {
+          const m = (lo + hi) >> 1;
+          if (dv.getUint16(ends + 2 * m) < c) lo = m + 1; else hi = m - 1;
+        }
+        if (lo >= seg || dv.getUint16(starts + 2 * lo) > c) return 0;
+        return glyphAt(lo, c);
+      };
+      f.forEachMapping = cb => {
+        for (let i = 0; i < seg; i++) {
+          const st = dv.getUint16(starts + 2 * i), en = dv.getUint16(ends + 2 * i);
+          if (st === 0xFFFF) continue;
+          for (let c = st; c <= en; c++) { const g = glyphAt(i, c); if (g) cb(c, g); }
+        }
+      };
+    } else if (s.fmt === 12) {
+      const ng = dv.getUint32(o + 12);
+      f.lookup = c => {
+        let lo = 0, hi = ng - 1;
+        while (lo <= hi) {
+          const m = (lo + hi) >> 1, r = o + 16 + 12 * m;
+          const a = dv.getUint32(r), b = dv.getUint32(r + 4);
+          if (c < a) hi = m - 1; else if (c > b) lo = m + 1; else return dv.getUint32(r + 8) + (c - a);
+        }
+        return 0;
+      };
+      f.forEachMapping = cb => {
+        for (let m = 0; m < ng; m++) {
+          const r = o + 16 + 12 * m, a = dv.getUint32(r), b = dv.getUint32(r + 4), g0 = dv.getUint32(r + 8);
+          for (let c = a; c <= b && c - a < 70000; c++) cb(c, g0 + c - a);
+        }
+      };
+    } else if (s.fmt === 6) {
+      const first = dv.getUint16(o + 6), cnt = dv.getUint16(o + 8);
+      f.lookup = c => (c >= first && c < first + cnt) ? dv.getUint16(o + 10 + 2 * (c - first)) : 0;
+      f.forEachMapping = cb => { for (let i = 0; i < cnt; i++) { const g = dv.getUint16(o + 10 + 2 * i); if (g) cb(first + i, g); } };
+    } else if (s.fmt === 0) {
+      f.lookup = c => c < 256 ? dv.getUint8(o + 6 + c) : 0;
+      f.forEachMapping = cb => { for (let c = 0; c < 256; c++) { const g = dv.getUint8(o + 6 + c); if (g) cb(c, g); } };
+    }
+  }
+
+  // Unicode -> glyph id (handles symbol cmaps)
+  function glyphFor(f, cp) {
+    let g = f.lookup(cp);
+    if (!g && f.cmapKind === 'symbol' && cp < 256) g = f.lookup(0xF000 + cp);
+    return g < f.numGlyphs ? g : 0;
+  }
+
+  function advance(f, gid) {
+    const i = Math.min(gid, f.numHMetrics - 1);
+    return f.dv.getUint16(f.hmtx + 4 * i);
+  }
+
+  function glyphRange(f, gid) {
+    if (f.isCFF || !f.tables.loca || !f.tables.glyf) return null;
+    const lo = f.tables.loca.offset, dv = f.dv;
+    if (gid >= f.numGlyphs) return null;
+    let a, b;
+    if (f.locFormat === 0) { a = dv.getUint16(lo + 2 * gid) * 2; b = dv.getUint16(lo + 2 * gid + 2) * 2; }
+    else { a = dv.getUint32(lo + 4 * gid); b = dv.getUint32(lo + 4 * gid + 4); }
+    return [f.tables.glyf.offset + a, f.tables.glyf.offset + b];
+  }
+
+  function hasOutline(f, gid) {
+    if (gid <= 0 || gid >= f.numGlyphs) return false;
+    if (f.isCFF) return true;
+    const r = glyphRange(f, gid);
+    return !!r && r[1] > r[0];
+  }
+
+  function compositeDeps(f, gid) {
+    const r = glyphRange(f, gid);
+    if (!r || r[1] - r[0] < 10) return [];
+    const dv = f.dv;
+    if (dv.getInt16(r[0]) >= 0) return [];
+    const out = [];
+    let p = r[0] + 10, flags;
+    do {
+      flags = dv.getUint16(p); out.push(dv.getUint16(p + 2)); p += 4;
+      p += (flags & 1) ? 4 : 2;
+      if (flags & 8) p += 2; else if (flags & 0x40) p += 4; else if (flags & 0x80) p += 8;
+    } while ((flags & 0x20) && p < r[1]);
+    return out;
+  }
+
+  function checksum(b) {
+    let s = 0;
+    for (let i = 0; i < b.length; i += 4) s = (s + ((b[i] << 24) | ((b[i + 1] || 0) << 16) | ((b[i + 2] || 0) << 8) | (b[i + 3] || 0))) >>> 0;
+    return s;
+  }
+
+  function writeSfnt(version, tbls) {
+    const tags = Object.keys(tbls).sort();
+    const n = tags.length;
+    let size = 12 + 16 * n;
+    for (const t of tags) size += (tbls[t].length + 3) & ~3;
+    const out = new Uint8Array(size), dv = new DataView(out.buffer);
+    dv.setUint32(0, version); dv.setUint16(4, n);
+    let es = 0; while ((1 << (es + 1)) <= n) es++;
+    dv.setUint16(6, 16 * (1 << es)); dv.setUint16(8, es); dv.setUint16(10, 16 * n - 16 * (1 << es));
+    let off = 12 + 16 * n;
+    tags.forEach((t, i) => {
+      const d = tbls[t], r = 12 + 16 * i;
+      for (let k = 0; k < 4; k++) out[r + k] = t.charCodeAt(k);
+      dv.setUint32(r + 4, checksum(d)); dv.setUint32(r + 8, off); dv.setUint32(r + 12, d.length);
+      out.set(d, off); off += (d.length + 3) & ~3;
+    });
+    return out;
+  }
+
+  const tableBytes = (f, t) => f.tables[t] ? f.bytes.slice(f.tables[t].offset, f.tables[t].offset + f.tables[t].length) : null;
+
+  // Keep-glyph-ids subset of a TrueType font (unused glyphs emptied)
+  function subsetTrueType(f, gids) {
+    const keep = new Set([0]);
+    const queue = [...gids];
+    while (queue.length) {
+      const g = queue.pop();
+      if (keep.has(g) || g >= f.numGlyphs) continue;
+      keep.add(g);
+      for (const d of compositeDeps(f, g)) if (!keep.has(d)) queue.push(d);
+    }
+    let glyfLen = 0;
+    const ranges = [];
+    for (let g = 0; g < f.numGlyphs; g++) {
+      const r = keep.has(g) ? glyphRange(f, g) : null;
+      const len = r ? r[1] - r[0] : 0;
+      ranges.push(r && len > 0 ? r : null);
+      glyfLen += (len + 3) & ~3;
+    }
+    const glyf = new Uint8Array(glyfLen), loca = new Uint8Array(4 * (f.numGlyphs + 1)), ldv = new DataView(loca.buffer);
+    let p = 0;
+    for (let g = 0; g < f.numGlyphs; g++) {
+      ldv.setUint32(4 * g, p);
+      const r = ranges[g];
+      if (r) { glyf.set(f.bytes.subarray(r[0], r[1]), p); p += (r[1] - r[0] + 3) & ~3; }
+    }
+    ldv.setUint32(4 * f.numGlyphs, p);
+    const head = tableBytes(f, 'head');
+    const hdv = new DataView(head.buffer);
+    hdv.setUint32(8, 0); hdv.setInt16(50, 1);
+    const t = { head, loca, glyf };
+    for (const k of ['hhea', 'maxp', 'hmtx', 'cvt ', 'fpgm', 'prep']) { const b = tableBytes(f, k); if (b) t[k] = b; }
+    return writeSfnt(0x00010000, t);
+  }
+
+  // Whole font as a standalone file (extracts one font from a .ttc)
+  function standalone(f) {
+    const t = {};
+    for (const k of Object.keys(f.tables)) t[k] = tableBytes(f, k);
+    return writeSfnt(f.isCFF ? 0x4F54544F : 0x00010000, t);
+  }
+
+  // CFF: glyph id -> CID (for CID-keyed CFF); identity otherwise
+  function cffGidToCid(f) {
+    if (f._g2c !== undefined) return f._g2c;
+    f._g2c = null;
+    try {
+      const b = f.bytes, base = f.tables['CFF '].offset;
+      const u = (o, n) => { let v = 0; for (let i = 0; i < n; i++) v = v * 256 + b[o + i]; return v; };
+      const index = o => {
+        const cnt = u(o, 2); if (!cnt) return { end: o + 2, items: [] };
+        const os = b[o + 2], offs = [];
+        for (let i = 0; i <= cnt; i++) offs.push(u(o + 3 + i * os, os));
+        const data = o + 3 + (cnt + 1) * os - 1;
+        return { end: data + offs[cnt], items: offs.slice(0, cnt).map((s, i) => [data + s, data + offs[i + 1]]) };
+      };
+      const hdrSize = b[base + 2];
+      const names = index(base + hdrSize);
+      const top = index(names.end);
+      const [ts, te] = top.items[0];
+      const dict = {}; let ops = [], p = ts;
+      while (p < te) {
+        const c = b[p];
+        if (c <= 21) { let k = c; p++; if (c === 12) { k = 1200 + b[p]; p++; } dict[k] = ops; ops = []; }
+        else if (c === 28) { ops.push((b[p + 1] << 24 >> 16) | b[p + 2]); p += 3; }
+        else if (c === 29) { ops.push((b[p + 1] << 24) | (b[p + 2] << 16) | (b[p + 3] << 8) | b[p + 4]); p += 5; }
+        else if (c === 30) { p++; while (p < te) { const x = b[p++]; if ((x & 15) === 15 || (x >> 4) === 15) break; } ops.push(0); }
+        else if (c >= 32 && c <= 246) { ops.push(c - 139); p++; }
+        else if (c >= 247 && c <= 250) { ops.push((c - 247) * 256 + b[p + 1] + 108); p += 2; }
+        else if (c >= 251 && c <= 254) { ops.push(-(c - 251) * 256 - b[p + 1] - 108); p += 2; }
+        else p++;
+      }
+      if (!dict[1230]) return null; // not CID-keyed (ROS)
+      const csOff = dict[15] ? dict[15][0] : 0;
+      if (csOff <= 2) return null;
+      const n = f.numGlyphs, map = new Uint32Array(n);
+      let q = base + csOff;
+      const fmt = b[q++];
+      let g = 1;
+      if (fmt === 0) { for (; g < n; g++, q += 2) map[g] = u(q, 2); }
+      else {
+        while (g < n) {
+          const first = u(q, 2), nl = fmt === 1 ? b[q + 2] : u(q + 2, 2);
+          q += fmt === 1 ? 3 : 4;
+          for (let k = 0; k <= nl && g < n; k++) map[g++] = first + k;
+        }
+      }
+      f._g2c = map;
+    } catch (e) { f._g2c = null; }
+    return f._g2c;
+  }
+
+  return { open, count, glyphFor, advance, hasOutline, subsetTrueType, standalone, cffGidToCid };
+})();
+
+/* ===================== PDF text editing engine ===================== */
+const PdfTextEngine = (() => {
+  const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFNumber, PDFRawStream, StandardFonts, decodePDFRawStream } = PDFLib;
+
+  /* ---------- helpers ---------- */
+  const Nm = s => PDFName.of(s);
+  const I6 = [1, 0, 0, 1, 0, 0];
+  const mul = (m, n) => [
+    m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3],
+    m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3],
+    m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+  const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+  const inv = m => {
+    const d = m[0] * m[3] - m[1] * m[2] || 1e-12;
+    return [m[3] / d, -m[1] / d, -m[2] / d, m[0] / d, (m[2] * m[5] - m[3] * m[4]) / d, (m[1] * m[4] - m[0] * m[5]) / d];
+  };
+  const fmt = v => {
+    if (!isFinite(v)) v = 0;
+    let s = String(Math.round(v * 10000) / 10000);
+    if (s.includes('e')) s = v.toFixed(6);
+    return s === '-0' ? '0' : s;
+  };
+  const enc = s => new TextEncoder().encode(s);
+  const latin1 = b => { let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return s; };
+  const hex = bytes => '<' + bytes.map(b => (b < 16 ? '0' : '') + b.toString(16)).join('').toUpperCase() + '>';
+  const isWS = c => c === 0 || c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+  const isDelim = c => c === 40 || c === 41 || c === 60 || c === 62 || c === 91 || c === 93 || c === 123 || c === 125 || c === 47 || c === 37;
+  const PUA = 0xF0000;
+  const isCJKChar = cp => (cp >= 0x2E80 && cp <= 0x9FFF) || (cp >= 0xAC00 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+    (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFFEF) || (cp >= 0x20000 && cp <= 0x3FFFF);
+  const isFullWidth = cp => isCJKChar(cp) || (cp >= 0x3000 && cp <= 0x303F);
+
+  function streamBytes(s) {
+    if (!s) return new Uint8Array(0);
+    if (s instanceof PDFRawStream) return decodePDFRawStream(s).decode();
+    if (typeof s.getUnencodedContents === 'function') return s.getUnencodedContents();
+    if (typeof s.getContents === 'function') return s.getContents();
+    return new Uint8Array(0);
+  }
+
+  /* ---------- content stream lexer ---------- */
+  function readLiteral(b, i) {
+    let depth = 1; i++;
+    const out = [];
+    while (i < b.length) {
+      const c = b[i++];
+      if (c === 92) {
+        const d = b[i++];
+        if (d === 110) out.push(10); else if (d === 114) out.push(13); else if (d === 116) out.push(9);
+        else if (d === 98) out.push(8); else if (d === 102) out.push(12);
+        else if (d === 13) { if (b[i] === 10) i++; }
+        else if (d === 10) { /* line continuation */ }
+        else if (d >= 48 && d <= 55) {
+          let v = d - 48;
+          for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++) v = v * 8 + (b[i++] - 48);
+          out.push(v & 255);
+        } else out.push(d);
+      } else if (c === 40) { depth++; out.push(c); }
+      else if (c === 41) { if (--depth === 0) break; out.push(c); }
+      else out.push(c);
+    }
+    return { bytes: out, end: i };
+  }
+  function readHex(b, i) {
+    i++;
+    let s = '';
+    while (i < b.length && b[i] !== 62) { const c = b[i++]; if (!isWS(c)) s += String.fromCharCode(c); }
+    if (s.length % 2) s += '0';
+    const out = [];
+    for (let k = 0; k < s.length; k += 2) out.push(parseInt(s.substr(k, 2), 16) || 0);
+    return { bytes: out, end: i + 1 };
+  }
+
+  function lex(b) {
+    const ops = [];
+    let i = 0, args = [], argStart = -1;
+    const stack = [];
+    const n = b.length;
+    const push = (v, start) => {
+      if (stack.length) stack[stack.length - 1].items.push(v);
+      else { if (!args.length) argStart = start; args.push(v); }
+    };
+    while (i < n) {
+      const c = b[i];
+      if (isWS(c)) { i++; continue; }
+      if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue; }
+      const s = i;
+      if (c === 40) { const r = readLiteral(b, i); i = r.end; push({ t: 's', b: r.bytes }, s); continue; }
+      if (c === 60) {
+        if (b[i + 1] === 60) { stack.push({ kind: 'd', items: [], start: s }); i += 2; continue; }
+        const r = readHex(b, i); i = r.end; push({ t: 's', b: r.bytes, hex: true }, s); continue;
+      }
+      if (c === 62 && b[i + 1] === 62) {
+        i += 2;
+        const top = stack.pop();
+        if (top) push({ t: 'd', v: top.items }, top.start);
+        continue;
+      }
+      if (c === 91) { stack.push({ kind: 'a', items: [], start: s }); i++; continue; }
+      if (c === 93) { i++; const top = stack.pop(); if (top) push({ t: 'a', v: top.items }, top.start); continue; }
+      if (c === 47) {
+        i++;
+        let name = '';
+        while (i < n && !isWS(b[i]) && !isDelim(b[i])) {
+          if (b[i] === 35 && i + 2 < n) { name += String.fromCharCode(parseInt(String.fromCharCode(b[i + 1], b[i + 2]), 16) || 0); i += 3; }
+          else name += String.fromCharCode(b[i++]);
+        }
+        push({ t: 'N', v: name }, s);
+        continue;
+      }
+      if ((c >= 48 && c <= 57) || c === 43 || c === 45 || c === 46) {
+        let j = i + 1;
+        while (j < n && ((b[j] >= 48 && b[j] <= 57) || b[j] === 46)) j++;
+        const str = String.fromCharCode.apply(null, b.subarray(i, j));
+        i = j;
+        push({ t: 'n', v: parseFloat(str) || 0 }, s);
+        continue;
+      }
+      if (c === 123 || c === 125 || c === 41 || c === 62) { i++; continue; }
+      let j = i;
+      while (j < n && !isWS(b[j]) && !isDelim(b[j])) j++;
+      if (j === i) { i++; continue; }
+      const kw = String.fromCharCode.apply(null, b.subarray(i, j));
+      i = j;
+      if (kw === 'true' || kw === 'false') { push({ t: 'k', v: kw }, s); continue; }
+      if (kw === 'null') { push({ t: 'k', v: 'null' }, s); continue; }
+      if (stack.length) { stack.length = 0; }
+      if (kw === 'BI') {
+        // inline image: skip to EI
+        let p = i;
+        while (p + 2 < n && !(b[p] === 73 && b[p + 1] === 68 && (isWS(b[p - 1]) || isDelim(b[p - 1])) && isWS(b[p + 2]))) p++;
+        let q = p + 3;
+        while (q + 1 < n && !(b[q] === 69 && b[q + 1] === 73 && isWS(b[q - 1]) && (q + 2 >= n || isWS(b[q + 2]) || isDelim(b[q + 2])))) q++;
+        i = Math.min(n, q + 2);
+        ops.push({ op: 'BI', args: [], start: args.length ? argStart : s, end: i });
+        args = [];
+        continue;
+      }
+      ops.push({ op: kw, args, start: args.length ? argStart : s, end: i });
+      args = [];
+    }
+    return ops;
+  }
+
+  const escName = s => s.replace(/[^\x21-\x7E]|[#()<>[\]{}/%]/g, ch => '#' + ch.charCodeAt(0).toString(16).padStart(2, '0'));
+  function ser(v) {
+    switch (v.t) {
+      case 'n': return fmt(v.v);
+      case 'N': return '/' + escName(v.v);
+      case 's': return hex(v.b);
+      case 'a': return '[' + v.v.map(ser).join(' ') + ']';
+      case 'd': return '<<' + v.v.map(ser).join(' ') + '>>';
+      default: return String(v.v);
+    }
+  }
+  const serOp = o => o.args.map(ser).concat(o.op).join(' ');
+
+  /* ---------- encodings ---------- */
+  const tableFrom = label => { try { const d = new TextDecoder(label); const t = []; for (let i = 0; i < 256; i++) t[i] = d.decode(Uint8Array.of(i)); return t; } catch (e) { return null; } };
+  const WINANSI = tableFrom('windows-1252');
+  const MACROMAN = tableFrom('macintosh') || WINANSI;
+  const STANDARD = (() => {
+    const t = WINANSI.slice(0, 128).map((c, i) => i < 32 || i === 127 ? undefined : c);
+    t[0x27] = '’'; t[0x60] = '‘';
+    const hi = { 0xA1: '¡', 0xA2: '¢', 0xA3: '£', 0xA4: '⁄', 0xA5: '¥', 0xA6: 'ƒ', 0xA7: '§', 0xA8: '¤', 0xA9: "'", 0xAA: '“', 0xAB: '«', 0xAC: '‹', 0xAD: '›', 0xAE: 'ﬁ', 0xAF: 'ﬂ', 0xB1: '–', 0xB2: '†', 0xB3: '‡', 0xB4: '·', 0xB6: '¶', 0xB7: '•', 0xB8: '‚', 0xB9: '„', 0xBA: '”', 0xBB: '»', 0xBC: '…', 0xBD: '‰', 0xBF: '¿', 0xC1: '`', 0xC2: '´', 0xC3: 'ˆ', 0xC4: '˜', 0xC5: '¯', 0xC6: '˘', 0xC7: '˙', 0xC8: '¨', 0xCA: '˚', 0xCB: '¸', 0xCD: '˝', 0xCE: '˛', 0xCF: 'ˇ', 0xD0: '—', 0xE1: 'Æ', 0xE3: 'ª', 0xE8: 'Ł', 0xE9: 'Ø', 0xEA: 'Œ', 0xEB: 'º', 0xF1: 'æ', 0xF5: 'ı', 0xF8: 'ł', 0xF9: 'ø', 0xFA: 'œ', 0xFB: 'ß' };
+    for (const k in hi) t[k] = hi[k];
+    return t;
+  })();
+  const SYMBOL = (() => {
+    const t = [];
+    for (let i = 0x20; i < 0x7F; i++) t[i] = String.fromCharCode(i);
+    const up = 'ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ', lo = 'αβχδεφγηιϕκλμνοπθρστυϖωξψζ';
+    for (let i = 0; i < 26; i++) { t[0x41 + i] = up[i]; t[0x61 + i] = lo[i]; }
+    Object.assign(t, { 0x22: '∀', 0x24: '∃', 0x27: '∋', 0x2A: '∗', 0x2D: '−', 0x40: '≅', 0x5C: '∴', 0x5E: '⊥', 0x60: '‾',
+      0xA1: 'ϒ', 0xA2: '′', 0xA3: '≤', 0xA4: '⁄', 0xA5: '∞', 0xA6: 'ƒ', 0xAB: '↔', 0xAC: '←', 0xAD: '↑', 0xAE: '→', 0xAF: '↓',
+      0xB0: '°', 0xB1: '±', 0xB2: '″', 0xB3: '≥', 0xB4: '×', 0xB5: '∝', 0xB6: '∂', 0xB7: '•', 0xB8: '÷', 0xB9: '≠', 0xBA: '≡', 0xBB: '≈', 0xBC: '…',
+      0xC4: '⊗', 0xC5: '⊕', 0xC6: '∅', 0xC7: '∩', 0xC8: '∪', 0xCE: '∈', 0xCF: '∉', 0xD0: '∠', 0xD1: '∇', 0xD5: '∏', 0xD6: '√', 0xD7: '⋅', 0xD8: '¬',
+      0xD9: '∧', 0xDA: '∨', 0xDB: '⇔', 0xDE: '⇒', 0xE5: '∑', 0xF2: '∫' });
+    return t;
+  })();
+  const GLYPHS = (() => {
+    const g = {};
+    const ascii = ['space', 'exclam', 'quotedbl', 'numbersign', 'dollar', 'percent', 'ampersand', 'quotesingle', 'parenleft', 'parenright', 'asterisk', 'plus', 'comma', 'hyphen', 'period', 'slash',
+      'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'colon', 'semicolon', 'less', 'equal', 'greater', 'question', 'at'];
+    ascii.forEach((n, i) => g[n] = String.fromCharCode(32 + i));
+    for (let i = 0; i < 26; i++) { g[String.fromCharCode(65 + i)] = String.fromCharCode(65 + i); g[String.fromCharCode(97 + i)] = String.fromCharCode(97 + i); }
+    Object.assign(g, { bracketleft: '[', backslash: '\\', bracketright: ']', asciicircum: '^', underscore: '_', grave: '`', braceleft: '{', bar: '|', braceright: '}', asciitilde: '~',
+      quoteright: '’', quoteleft: '‘', quotedblleft: '“', quotedblright: '”', quotesinglbase: '‚', quotedblbase: '„', endash: '–', emdash: '—', bullet: '•', ellipsis: '…',
+      dagger: '†', daggerdbl: '‡', perthousand: '‰', trademark: '™', Euro: '€', minus: '−', fi: 'fi', fl: 'fl', ff: 'ff', ffi: 'ffi', ffl: 'ffl', dotlessi: 'ı',
+      degree: '°', plusminus: '±', multiply: '×', divide: '÷', mu: 'µ', periodcentered: '·', middot: '·', copyright: '©', registered: '®', section: '§', paragraph: '¶',
+      onehalf: '½', onequarter: '¼', threequarters: '¾', twosuperior: '²', threesuperior: '³', onesuperior: '¹', cent: '¢', sterling: '£', yen: '¥', nbspace: '\u00a0',
+      lessequal: '≤', greaterequal: '≥', notequal: '≠', approxequal: '≈', infinity: '∞', arrowright: '→', arrowleft: '←', arrowup: '↑', arrowdown: '↓', radical: '√',
+      summation: '∑', integral: '∫', partialdiff: '∂', proportional: '∝', Delta: 'Δ', Omega: 'Ω', florin: 'ƒ', guillemotleft: '«', guillemotright: '»', exclamdown: '¡', questiondown: '¿' });
+    const greek = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega'.split(' ');
+    greek.forEach((n, i) => { const lo = 'αβγδεζηθικλμνξοπρστυφχψω'[i]; if (!g[n]) g[n] = lo; g[n[0].toUpperCase() + n.slice(1)] = lo.toUpperCase(); });
+    g.mu = 'µ';
+    const latin1 = 'nbspace exclamdown cent sterling currency yen brokenbar section dieresis copyright ordfeminine guillemotleft logicalnot hyphen registered macron degree plusminus twosuperior threesuperior acute mu paragraph periodcentered cedilla onesuperior ordmasculine guillemotright onequarter onehalf threequarters questiondown Agrave Aacute Acircumflex Atilde Adieresis Aring AE Ccedilla Egrave Eacute Ecircumflex Edieresis Igrave Iacute Icircumflex Idieresis Eth Ntilde Ograve Oacute Ocircumflex Otilde Odieresis multiply Oslash Ugrave Uacute Ucircumflex Udieresis Yacute Thorn germandbls agrave aacute acircumflex atilde adieresis aring ae ccedilla egrave eacute ecircumflex edieresis igrave iacute icircumflex idieresis eth ntilde ograve oacute ocircumflex otilde odieresis divide oslash ugrave uacute ucircumflex udieresis yacute thorn ydieresis'.split(' ');
+    latin1.forEach((n, i) => { if (!g[n]) g[n] = String.fromCharCode(0xA0 + i); });
+    Object.assign(g, { Scaron: 'Š', scaron: 'š', Zcaron: 'Ž', zcaron: 'ž', OE: 'Œ', oe: 'œ', Ydieresis: 'Ÿ', circumflex: 'ˆ', tilde: '˜', guilsinglleft: '‹', guilsinglright: '›' });
+    return g;
+  })();
+  function glyphUnicode(name) {
+    if (GLYPHS[name] !== undefined) return GLYPHS[name];
+    let m = /^uni([0-9A-Fa-f]{4,})$/.exec(name);
+    if (m) { let s = ''; for (let i = 0; i + 4 <= m[1].length; i += 4) s += String.fromCharCode(parseInt(m[1].substr(i, 4), 16)); return s; }
+    m = /^u([0-9A-Fa-f]{4,6})$/.exec(name);
+    if (m) return String.fromCodePoint(parseInt(m[1], 16));
+    const base = name.split('.')[0];
+    if (base !== name && GLYPHS[base] !== undefined) return GLYPHS[base];
+    return undefined;
+  }
+
+  let BIG5_REV = null, GBK_REV = null;
+  function reverseTable(label) {
+    const d = new TextDecoder(label), m = new Map();
+    for (let a = 0x81; a <= 0xFE; a++) for (let b = 0x40; b <= 0xFE; b++) {
+      if (b === 0x7F) continue;
+      const s = d.decode(Uint8Array.of(a, b));
+      if (s.length && s !== '�' && !m.has(s)) m.set(s, (a << 8) | b);
+    }
+    return m;
+  }
+
+  /* ---------- ToUnicode CMap ---------- */
+  function utf16hex(h) {
+    if (h.length <= 2) return String.fromCharCode(parseInt(h || '0', 16));
+    let s = '';
+    for (let i = 0; i + 4 <= h.length; i += 4) s += String.fromCharCode(parseInt(h.substr(i, 4), 16));
+    return s;
+  }
+  function parseToUnicode(txt) {
+    const map = new Map();
+    const re = /<([0-9A-Fa-f\s]*)>|(\[)|(\])|(begincodespacerange|endcodespacerange|beginbfchar|endbfchar|beginbfrange|endbfrange)/g;
+    let mode = null, buf = [], arr = null, m;
+    const flush = () => {
+      if (mode === 'bfchar' && buf.length === 2) {
+        const v = utf16hex(buf[1]);
+        map.set(parseInt(buf[0], 16), v); buf = [];
+      } else if (mode === 'bfrange' && buf.length === 3) {
+        const lo = parseInt(buf[0], 16), hi = Math.min(parseInt(buf[1], 16), lo + 65535);
+        if (Array.isArray(buf[2])) { for (let c = lo; c <= hi && c - lo < buf[2].length; c++) map.set(c, utf16hex(buf[2][c - lo])); }
+        else {
+          const d = buf[2];
+          const head = d.slice(0, Math.max(0, d.length - 4)), last = parseInt(d.slice(-4), 16);
+          for (let c = lo; c <= hi; c++) map.set(c, utf16hex(head + (last + c - lo).toString(16).padStart(4, '0')));
+        }
+        buf = [];
+      } else if (mode === 'codespacerange' && buf.length === 2) buf = [];
+    };
+    while ((m = re.exec(txt))) {
+      if (m[4]) { mode = m[4].startsWith('begin') ? m[4].slice(5) : null; buf = []; continue; }
+      if (!mode) continue;
+      if (m[2]) { arr = []; continue; }
+      if (m[3]) { if (arr) { buf.push(arr); arr = null; flush(); } continue; }
+      const h = m[1].replace(/\s/g, '');
+      if (arr) { arr.push(h); continue; }
+      buf.push(h); flush();
+    }
+    return map;
+  }
+
+  /* ---------- standard 14 metrics ---------- */
+  const STD_NAMES = ['Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic', 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique',
+    'Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique', 'Symbol'];
+  const STD_W = {};
+  async function loadStdMetrics() {
+    if (STD_W['Times-Roman']) return;
+    const d = await PDFDocument.create();
+    for (const name of STD_NAMES) {
+      const f = await d.embedFont(name);
+      const t = new Float32Array(256);
+      const table = name === 'Symbol' ? SYMBOL : WINANSI;
+      for (let c = 32; c < 256; c++) {
+        const ch = table[c];
+        if (!ch) continue;
+        try { t[c] = f.widthOfTextAtSize(ch, 1000); } catch (e) { t[c] = 0; }
+      }
+      STD_W[name] = t;
+    }
+  }
+  function stdNameFor(base, flags = 0, bold, italic) {
+    const b = (base || '').replace(/[^A-Za-z]/g, '').toLowerCase();
+    if (/symbol/.test(b)) return 'Symbol';
+    bold = bold || /bold|black|heavy|semibold|demi/.test(b);
+    italic = italic || /italic|oblique/.test(b);
+    let fam;
+    if (/courier|mono|consol|typewriter/.test(b) || (flags & 1)) fam = 'Courier';
+    else if (/sans|arial|helvetica|calibri|verdana|tahoma|segoe|gothic|hei|carlito|dejavusans|liberationsans|inter|roboto/.test(b)) fam = 'Helvetica';
+    else if (/times|roman|serif|georgia|garamond|cambria|book|minion|caladea|ming|song|sung|kai|mincho/.test(b) || (flags & 2)) fam = 'Times';
+    else fam = 'Helvetica';
+    if (fam === 'Times') return 'Times-' + (bold && italic ? 'BoldItalic' : bold ? 'Bold' : italic ? 'Italic' : 'Roman');
+    const suf = bold && italic ? '-BoldOblique' : bold ? '-Bold' : italic ? '-Oblique' : '';
+    return fam + suf;
+  }
+
+  /* ---------- the document model ---------- */
+  class Doc {
+    constructor(pdf) {
+      this.pdf = pdf;
+      this.ctx = pdf.context;
+      this.fonts = new Map();       // key -> font info
+      this.fontList = [];
+      this.containers = new Map();
+      this.pages = [];
+      this.groups = new Map();      // key -> group
+      this.edits = new Map();       // key -> { text, fit }
+      this.history = [];
+      this.fallbacks = [];          // user fonts usable for anything
+      this.stdFonts = new Map();
+      this.uid = 0;
+    }
+
+    static async load(bytes) {
+      await loadStdMetrics();
+      const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+      const doc = new Doc(pdf);
+      doc.encrypted = !!pdf.context.trailerInfo.Encrypt;
+      if (doc.encrypted) return doc;
+      const pages = pdf.getPages();
+      pages.forEach((p, i) => doc.readPage(p, i));
+      for (const f of doc.fontList) doc.finishFont(f);
+      for (const pg of doc.pages) pg.groups = doc.makeGroups(pg.runs, pg.index);
+      return doc;
+    }
+
+    /* ----- fonts ----- */
+    fontFromResources(resDict, name) {
+      if (!resDict) return null;
+      const fd = resDict.lookup(Nm('Font'));
+      if (!(fd instanceof PDFDict)) return null;
+      let entry = fd.get(Nm(name));
+      if (!entry) return null;
+      if (!(entry instanceof PDFRef)) {
+        // register direct font dictionaries so they can be shared
+        const ref = this.ctx.register(entry);
+        fd.set(Nm(name), ref);
+        entry = ref;
+      }
+      return this.loadFont(entry);
+    }
+
+    loadFont(ref) {
+      const key = ref.toString();
+      if (this.fonts.has(key)) return this.fonts.get(key);
+      const dict = this.ctx.lookup(ref);
+      const f = {
+        id: 'f' + (++this.uid), key, ref, dict, kind: 'pdf', editable: true, why: '',
+        seen: new Map(), toUni: new Map(), uniToCode: new Map(), multi: new Map(), widthOverride: new Map(),
+        ascent: 0.8, descent: -0.2, bold: false, italic: false, isCJK: false, flags: 0,
+      };
+      this.fonts.set(key, f);
+      this.fontList.push(f);
+      try { this.setupFont(f); } catch (e) { f.editable = false; f.why = 'Unreadable font (' + e.message + ')'; }
+      return f;
+    }
+
+    setupFont(f) {
+      const d = f.dict, ctx = this.ctx;
+      if (!(d instanceof PDFDict)) throw new Error('bad font');
+      f.subtype = (d.get(Nm('Subtype')) || Nm('Type1')).decodeText();
+      let bf = d.get(Nm('BaseFont'));
+      if (!(bf instanceof PDFName)) {
+        const fdsc = d.lookup(Nm('FontDescriptor'));
+        if (fdsc instanceof PDFDict && fdsc.get(Nm('FontName')) instanceof PDFName) bf = fdsc.get(Nm('FontName'));
+        else if (d.get(Nm('Name')) instanceof PDFName) bf = d.get(Nm('Name'));
+      }
+      let raw = bf instanceof PDFName ? bf.asBytes() : new Uint8Array(0);
+      let name;
+      try { name = new TextDecoder('utf-8', { fatal: true }).decode(raw); } catch (e) {
+        try { name = new TextDecoder('big5', { fatal: true }).decode(raw); } catch (e2) {
+          try { name = new TextDecoder('gbk').decode(raw); } catch (e3) { name = latin1(raw); }
+        }
+      }
+      f.subset = /^[A-Z]{6}\+/.test(name);
+      f.baseName = name.replace(/^[A-Z]{6}\+/, '').replace(/-Identity-[HV]$/, '') || (f.subtype === 'Type3' ? 'Type 3 font' : 'Unnamed font');
+      let desc = d.lookup(Nm('FontDescriptor'));
+      let cid = null;
+      if (f.subtype === 'Type0') {
+        const dfs = d.lookup(Nm('DescendantFonts'));
+        cid = dfs instanceof PDFArray ? dfs.lookup(0) : null;
+        if (!(cid instanceof PDFDict)) throw new Error('no descendant font');
+        desc = cid.lookup(Nm('FontDescriptor'));
+        f.cidSubtype = (cid.get(Nm('Subtype')) || Nm('')).decodeText();
+      }
+      if (desc instanceof PDFDict) {
+        const a = desc.lookup(Nm('Ascent')), ds = desc.lookup(Nm('Descent'));
+        if (a instanceof PDFNumber && a.asNumber() > 300) f.ascent = Math.min(1.2, a.asNumber() / 1000);
+        if (ds instanceof PDFNumber && ds.asNumber() < 0) f.descent = Math.max(-0.6, ds.asNumber() / 1000);
+        const fl = desc.lookup(Nm('Flags')); if (fl instanceof PDFNumber) f.flags = fl.asNumber();
+        const fw = desc.lookup(Nm('FontWeight')); if (fw instanceof PDFNumber && fw.asNumber() >= 600) f.bold = true;
+        const ia = desc.lookup(Nm('ItalicAngle')); if (ia instanceof PDFNumber && Math.abs(ia.asNumber()) > 1) f.italic = true;
+        if (f.flags & (1 << 18)) f.bold = true;
+        for (const k of ['FontFile', 'FontFile2', 'FontFile3']) {
+          const s = desc.lookup(Nm(k));
+          if (s) { f.embedded = k; f.fontFile = s; }
+        }
+      }
+      if (/bold|black|heavy|semibold|demi|w[6-9]\b/i.test(f.baseName)) f.bold = true;
+      if (/italic|oblique/i.test(f.baseName)) f.italic = true;
+      if (/[　-鿿]/.test(f.baseName) || /ming|kai|song|sung|hei|jheng|yahei|gothic|mincho|cjk|pingfang|hiragino|heiti|simsun|batang|gulim|dfkai|msung|mhei|stsong|wenquanyi|zenhei/i.test(f.baseName)) f.isCJK = true;
+
+      const tu = d.lookup(Nm('ToUnicode'));
+      if (tu && typeof tu === 'object' && !(tu instanceof PDFName)) {
+        try { f.toUni = parseToUnicode(latin1(streamBytes(tu))); f.hasToUnicode = true; } catch (e) { /* ignore */ }
+      }
+
+      if (f.subtype === 'Type0') this.setupType0(f, d, cid);
+      else this.setupSimple(f, d);
+
+      for (const v of f.toUni.values()) { if (v && isCJKChar(v.codePointAt(0))) { f.isCJK = true; break; } }
+    }
+
+    setupSimple(f, d) {
+      const ctx = this.ctx;
+      f.codeLen = () => 1;
+      f.type3 = f.subtype === 'Type3';
+      let scale = 0.001;
+      if (f.type3) {
+        const fm = d.lookup(Nm('FontMatrix'));
+        if (fm instanceof PDFArray) scale = fm.lookup(0).asNumber();
+        f.charProcs = d.lookup(Nm('CharProcs'));
+      }
+      const first = (d.lookup(Nm('FirstChar')) || PDFNumber.of(0)).asNumber();
+      const wa = d.lookup(Nm('Widths'));
+      const widths = [];
+      if (wa instanceof PDFArray) for (let i = 0; i < wa.size(); i++) { const w = ctx.lookup(wa.get(i)); widths[first + i] = w instanceof PDFNumber ? w.asNumber() : 0; }
+      let missing = 0;
+      const desc = d.lookup(Nm('FontDescriptor'));
+      if (desc instanceof PDFDict) { const mw = desc.lookup(Nm('MissingWidth')); if (mw instanceof PDFNumber) missing = mw.asNumber(); }
+      f.std = !f.embedded && !f.type3 ? stdNameFor(f.baseName, f.flags) : null;
+      const stdW = f.std ? STD_W[f.std] : null;
+      f.w0 = code => {
+        let w = widths[code];
+        if (w === undefined) w = stdW && !(wa instanceof PDFArray) ? stdW[code] : missing;
+        return (w || 0) * scale;
+      };
+      // encoding
+      let base = null, diffs = {};
+      const e = d.lookup(Nm('Encoding'));
+      const pick = n => n === 'WinAnsiEncoding' ? WINANSI : n === 'MacRomanEncoding' ? MACROMAN : n === 'StandardEncoding' ? STANDARD : null;
+      if (e instanceof PDFName) base = pick(e.decodeText());
+      else if (e instanceof PDFDict) {
+        const be = e.lookup(Nm('BaseEncoding'));
+        if (be instanceof PDFName) base = pick(be.decodeText());
+        const df = e.lookup(Nm('Differences'));
+        if (df instanceof PDFArray) {
+          let c = 0;
+          for (let i = 0; i < df.size(); i++) {
+            const v = df.lookup(i);
+            if (v instanceof PDFNumber) c = v.asNumber();
+            else if (v instanceof PDFName) diffs[c++] = v.decodeText();
+          }
+        }
+      }
+      const symbolic = /symbol/i.test(f.baseName) || (f.flags & 4 && !(f.flags & 32));
+      if (!base) {
+        if (/symbol/i.test(f.baseName) && !f.embedded) base = SYMBOL;
+        else if (f.subtype === 'TrueType' && !symbolic) base = WINANSI;
+        else base = f.embedded && symbolic ? null : STANDARD;
+      }
+      f.codeUni = [];
+      f.diffs = diffs;
+      for (let c = 0; c < 256; c++) {
+        let u = f.toUni.get(c);
+        if (u === undefined && diffs[c]) u = glyphUnicode(diffs[c]);
+        if (u === undefined && base && !diffs[c]) u = base[c];
+        if (u && u.length === 1 && u >= '\u2E80' && u <= '\u2FDF') u = u.normalize('NFKC');
+        if (u !== undefined && u !== '' && u !== '�') f.codeUni[c] = u;
+      }
+      f.decodeUni = code => f.codeUni[code];
+      f.encodeCode = code => [code & 255];
+      f.fullCharset = !f.embedded && !f.type3;
+      f.std14Like = f.fullCharset;
+      // which codes have glyphs
+      f.codeAvail = code => {
+        if (f.type3) {
+          const nm = diffs[code];
+          return !!(nm && f.charProcs instanceof PDFDict && f.charProcs.get(Nm(nm)));
+        }
+        if (f.fullCharset) return f.codeUni[code] !== undefined;
+        if (!f.subset) return f.codeUni[code] !== undefined && (widths[code] || 0) > 0;
+        return false;
+      };
+    }
+
+    setupType0(f, d, cid) {
+      const ctx = this.ctx;
+      const e = d.get(Nm('Encoding'));
+      let encName = e instanceof PDFName ? e.decodeText() : '';
+      if (!encName) {
+        const es = ctx.lookup(e);
+        if (es && es.dict) {
+          const cn = es.dict.lookup(Nm('CMapName'));
+          encName = cn instanceof PDFName ? cn.decodeText() : 'embedded';
+        }
+      }
+      f.encName = encName;
+      if (/-V$/.test(encName)) { f.editable = false; f.why = 'Vertical text is not supported'; }
+      let mode;
+      if (/^Identity-[HV]$/.test(encName)) mode = 'identity';
+      else if (/UCS2-[HV]$/.test(encName)) mode = 'ucs2';
+      else if (/UTF16-[HV]$/.test(encName)) mode = 'utf16';
+      else if (/B5|HKscs|ETen|HKdla|HKgccs|HKm/i.test(encName)) mode = 'big5';
+      else if (/^GB/i.test(encName)) mode = 'gbk';
+      else { mode = 'other'; f.editable = false; f.why = 'Unsupported text encoding (' + (encName || 'custom') + ')'; }
+      f.mode = mode;
+      const ci = cid.lookup(Nm('CIDSystemInfo'));
+      if (ci instanceof PDFDict) {
+        const ord = ci.lookup(Nm('Ordering'));
+        if (ord && /CNS|GB|Japan|Korea/.test(ord.decodeText ? ord.decodeText() : '')) f.isCJK = true;
+      }
+      // widths
+      const dwO = cid.lookup(Nm('DW'));
+      const dw = dwO instanceof PDFNumber ? dwO.asNumber() : 1000;
+      const W = new Map();
+      const wa = cid.lookup(Nm('W'));
+      if (wa instanceof PDFArray) {
+        let i = 0;
+        const n = wa.size();
+        while (i < n) {
+          const a = wa.lookup(i); const b = wa.lookup(i + 1);
+          if (!(a instanceof PDFNumber)) break;
+          if (b instanceof PDFArray) {
+            for (let k = 0; k < b.size(); k++) { const w = b.lookup(k); W.set(a.asNumber() + k, w instanceof PDFNumber ? w.asNumber() : dw); }
+            i += 2;
+          } else {
+            const c = wa.lookup(i + 2);
+            if (!(b instanceof PDFNumber) || !(c instanceof PDFNumber)) break;
+            for (let k = a.asNumber(); k <= b.asNumber() && k - a.asNumber() < 70000; k++) W.set(k, c.asNumber());
+            i += 3;
+          }
+        }
+      }
+      f.cidW = W; f.dw = dw;
+      if (mode === 'identity') {
+        f.codeLen = () => 2;
+        f.w0 = code => (f.widthOverride.get(code) ?? W.get(code) ?? dw) / 1000;
+        f.decodeUni = code => f.toUni.get(code);
+        f.encodeCode = code => [(code >> 8) & 255, code & 255];
+        f.fullCharset = false;
+      } else if (mode === 'ucs2' || mode === 'utf16') {
+        f.codeLen = (b, p) => (mode === 'utf16' && b[p] >= 0xD8 && b[p] <= 0xDB) ? 4 : 2;
+        f.decodeUni = code => f.toUni.get(code) ?? (code > 0xFFFF ? String.fromCharCode(code >>> 16, code & 0xFFFF) : String.fromCharCode(code));
+        f.encodeCode = code => code > 0xFFFF ? [(code >>> 24) & 255, (code >>> 16) & 255, (code >> 8) & 255, code & 255] : [(code >> 8) & 255, code & 255];
+        f.uniToCodeFull = ch => { if (ch.length === 1) return ch.charCodeAt(0); if (mode === 'utf16' && ch.length === 2) return ((ch.charCodeAt(0) << 16) | ch.charCodeAt(1)) >>> 0; return null; };
+      } else if (mode === 'big5' || mode === 'gbk') {
+        const dec = new TextDecoder(mode);
+        f.codeLen = (b, p) => b[p] < 0x81 ? 1 : 2;
+        f.decodeUni = code => f.toUni.get(code) ?? (code < 0x81 ? String.fromCharCode(code) : dec.decode(Uint8Array.of(code >> 8, code & 255)));
+        f.encodeCode = code => code < 0x100 ? [code] : [(code >> 8) & 255, code & 255];
+        f.uniToCodeFull = ch => {
+          const cp = ch.codePointAt(0);
+          if (ch.length === 1 && cp < 0x80) return cp;
+          if (mode === 'big5') { BIG5_REV = BIG5_REV || reverseTable('big5'); return BIG5_REV.get(ch) ?? null; }
+          GBK_REV = GBK_REV || reverseTable('gbk'); return GBK_REV.get(ch) ?? null;
+        };
+      } else {
+        f.codeLen = () => 2;
+        f.decodeUni = code => f.toUni.get(code);
+        f.encodeCode = code => [(code >> 8) & 255, code & 255];
+      }
+      if (mode !== 'identity') {
+        f.w0 = code => {
+          const u = f.decodeUni(code);
+          const cp = u ? u.codePointAt(0) : 0;
+          return (isFullWidth(cp) ? (dw || 1000) : 500) / 1000;
+        };
+        f.fullCharset = !f.embedded && !!f.uniToCodeFull;
+      }
+      f.codeAvail = () => false;
+      // CIDToGIDMap for TrueType-based CID fonts
+      f.cidToGid = null;
+      const c2g = cid.lookup(Nm('CIDToGIDMap'));
+      if (c2g && !(c2g instanceof PDFName)) {
+        try {
+          const b = streamBytes(c2g);
+          const m = new Map();
+          for (let i = 0; i + 1 < b.length; i += 2) { const g = (b[i] << 8) | b[i + 1]; if (g && !m.has(g)) m.set(g, i / 2); }
+          f.gidToCid = m;
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    // After all pages are read: build unicode -> code tables
+    finishFont(f) {
+      if (!f.decodeUni) return;
+      const add = (u, code) => {
+        if (!u) return;
+        if ([...u].length === 1) { if (!f.uniToCode.has(u)) f.uniToCode.set(u, code); }
+        else if (!f.multi.has(u)) f.multi.set(u, code);
+      };
+      // codes used in the document are certainly present
+      for (const code of f.seen.keys()) {
+        const u = f.decodeUni(code);
+        add(u === undefined ? String.fromCodePoint(PUA + (code & 0xFFFF)) : u, code);
+      }
+      if (f.codeUni) {
+        for (let c = 0; c < 256; c++) if (f.codeAvail(c)) add(f.codeUni[c], c);
+        // codes listed in ToUnicode of a subset font are (almost always) in the subset
+        if (f.hasToUnicode && !f.type3) for (const [c, u] of f.toUni) if (c < 256 && f.codeUni[c] !== undefined && (f.w0(c) > 0 || u === ' ')) add(u, c);
+      } else if (f.hasToUnicode) {
+        for (const [c, u] of f.toUni) add(u, c);
+      }
+      // look inside an embedded TrueType program for more glyphs
+      if (f.embedded === 'FontFile2') {
+        try {
+          const sf = Sfnt.open(streamBytes(f.fontFile));
+          f.sfnt = sf;
+          if (f.subtype === 'Type0' && f.mode === 'identity') {
+            const g2c = f.gidToCid;
+            sf.forEachMapping((cp, gid) => {
+              if (cp < 32 || (cp >= 0xD800 && cp <= 0xDFFF)) return;
+              const ch = String.fromCodePoint(cp);
+              if (f.uniToCode.has(ch)) return;
+              if (!(Sfnt.hasOutline(sf, gid) || cp === 32)) return;
+              const cidv = g2c ? g2c.get(gid) : gid;
+              if (cidv === undefined) return;
+              f.uniToCode.set(ch, cidv);
+              if (!f.cidW.has(cidv)) f.widthOverride.set(cidv, Sfnt.advance(sf, gid) * 1000 / sf.upem);
+            });
+          } else if (f.codeUni) {
+            for (let c = 0; c < 256; c++) {
+              const u = f.codeUni[c];
+              if (!u || f.uniToCode.has(u) || !(f.w0(c) > 0)) continue;
+              let gid = 0;
+              if (sf.cmapKind === 'symbol') gid = sf.lookup(0xF000 + c) || sf.lookup(c);
+              else if (sf.cmapKind === 'mac') gid = sf.lookup(c);
+              else gid = sf.lookup(u.codePointAt(0));
+              if (gid && (Sfnt.hasOutline(sf, gid) || u === ' ')) f.uniToCode.set(u, c);
+            }
+          }
+        } catch (e) { /* not parseable: rely on used glyphs */ }
+      }
+      for (const ch of f.uniToCode.keys()) { if (isCJKChar(ch.codePointAt(0))) { f.isCJK = true; break; } }
+      f.label = f.baseName + (f.bold && !/bold/i.test(f.baseName) ? ' Bold' : '');
+    }
+
+    // code for a character in a font, or null
+    codeFor(font, ch) {
+      if (font.kind === 'pdf') {
+        if (!font.editable) return null;
+        const c = font.uniToCode.get(ch);
+        if (c !== undefined) return c;
+        if (font.fullCharset) {
+          if (font.uniToCodeFull) return font.uniToCodeFull(ch);
+          if (font.codeUni) { for (let k = 0; k < 256; k++) if (font.codeUni[k] === ch) return k; }
+        }
+        if (ch === '\u00a0') return this.codeFor(font, ' ');
+        return null;
+      }
+      if (font.kind === 'std') {
+        const t = font.name === 'Symbol' ? SYMBOL : WINANSI;
+        for (let k = 32; k < 256; k++) if (t[k] === ch && STD_W[font.name][k] > 0) return k;
+        if (ch === '\u00a0') return 32;
+        return null;
+      }
+      if (font.kind === 'ttf') {
+        const cp = ch.codePointAt(0);
+        const g = Sfnt.glyphFor(font.sfnt, cp);
+        if (g && (Sfnt.hasOutline(font.sfnt, g) || cp === 32 || cp === 0xA0)) return g;
+        return null;
+      }
+      return null;
+    }
+    fontW0(font, code) {
+      if (font.kind === 'pdf') return font.w0(code);
+      if (font.kind === 'std') return STD_W[font.name][code] / 1000;
+      if (font.kind === 'ttf') return Sfnt.advance(font.sfnt, code) / font.sfnt.upem;
+      return 0.5;
+    }
+    fontCodeBytes(font, code) {
+      if (font.kind === 'pdf') return font.encodeCode(code);
+      if (font.kind === 'std') return [code];
+      if (font.kind === 'ttf') { const c = font.cidOf(code); return [(c >> 8) & 255, c & 255]; }
+      return [];
+    }
+    fontAscDesc(font) {
+      if (font.kind === 'ttf') return [font.sfnt.ascender / font.sfnt.upem, font.sfnt.descender / font.sfnt.upem];
+      if (font.kind === 'std') return [0.75, -0.22];
+      return [font.ascent, font.descent];
+    }
+
+    /* ----- containers & interpretation ----- */
+    pageContainer(page, index) {
+      const key = 'p' + index;
+      if (this.containers.has(key)) return this.containers.get(key);
+      const node = page.node;
+      const contents = node.get(Nm('Contents'));
+      const parts = [];
+      const resolved = this.ctx.lookup(contents);
+      if (resolved instanceof PDFArray) { for (let i = 0; i < resolved.size(); i++) parts.push(resolved.lookup(i)); }
+      else if (resolved) parts.push(resolved);
+      const chunks = parts.map(s => { try { return streamBytes(s); } catch (e) { return new Uint8Array(0); } });
+      let total = 0; chunks.forEach(c => total += c.length + 1);
+      const bytes = new Uint8Array(total);
+      let o = 0; chunks.forEach(c => { bytes.set(c, o); o += c.length; bytes[o++] = 10; });
+      const c = { key, kind: 'page', pageIndex: index, page, node, origContents: contents, bytes, ops: lex(bytes), used: new Map() };
+      this.containers.set(key, c);
+      return c;
+    }
+    formContainer(ref) {
+      const key = 'x' + ref.toString();
+      if (this.containers.has(key)) return this.containers.get(key);
+      const stream = this.ctx.lookup(ref);
+      let bytes;
+      try { bytes = streamBytes(stream); } catch (e) { bytes = new Uint8Array(0); }
+      const c = { key, kind: 'form', ref, origStream: stream, bytes, ops: lex(bytes), used: new Map() };
+      this.containers.set(key, c);
+      return c;
+    }
+
+    readPage(page, index) {
+      const { width, height } = page.getSize();
+      const pg = { index, width, height, runs: [], groups: [], hasImages: false, textOps: 0 };
+      this.pages.push(pg);
+      let cont;
+      try { cont = this.pageContainer(page, index); } catch (e) { return; }
+      const res = page.node.Resources();
+      this.interpret(cont, res, I6, pg, 0, 'p' + index);
+    }
+
+    interpret(cont, res, ctm0, pg, depth, useId) {
+      if (depth > 8) return;
+      const gs = { ctm: ctm0, font: null, res: null, fs: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, tr: 0, fill: '', cs: '' };
+      const stack = [];
+      let tm = I6, tlm = I6;
+      const ops = cont.ops;
+      const nums = a => a.map(v => v.v);
+      const show = (items, idx, o) => {
+        pg.textOps++;
+        const font = gs.font;
+        if (!font) return;
+        const M0 = mul(tm, gs.ctm);
+        let x = 0;
+        const pieces = [];
+        const decode = font.decodeUni ? font : null;
+        for (const it of items) {
+          if (it.t === 'n') { x += -it.v / 1000 * gs.fs * gs.th; continue; }
+          if (it.t !== 's') continue;
+          const b = it.b;
+          let p = 0;
+          while (p < b.length) {
+            const len = decode ? Math.min(font.codeLen(b, p), b.length - p) : 1;
+            let code = 0;
+            for (let k = 0; k < len; k++) code = code * 256 + b[p + k];
+            code = code >>> 0;
+            const codeBytes = b.slice(p, p + len);
+            p += len;
+            const w0 = font.w0 ? font.w0(code) : 0.5;
+            const isSp = len === 1 && code === 32;
+            const adv = (w0 * gs.fs + gs.tc + (isSp ? gs.tw : 0)) * gs.th;
+            let u = decode ? font.decodeUni(code) : undefined;
+            if (u === undefined || u === '' || u === '�') u = String.fromCodePoint(PUA + (code & 0xFFFF));
+            if (u === '\u00a0') u = ' ';
+            else if (u.length === 1 && u >= '\u2E80' && u <= '\u2FDF') u = u.normalize('NFKC');
+            font.seen.set(code, (font.seen.get(code) || 0) + 1);
+            pieces.push({ text: u, code: codeBytes, x, adv });
+            x += adv;
+          }
+        }
+        const run = {
+          cont, useId, opIndex: idx, op: o.op, args: o.args, font, res: gs.res, fs: gs.fs, tc: gs.tc, tw: gs.tw, th: gs.th, rise: gs.rise,
+          hidden: gs.tr === 3 || gs.tr === 7, fill: (gs.cs ? gs.cs + ' ' : '') + gs.fill, M0, pieces, advance: x,
+        };
+        pg.runs.push(run);
+        tm = mul([1, 0, 0, 1, x, 0], tm);
+      };
+      for (let i = 0; i < ops.length; i++) {
+        const o = ops[i], a = o.args;
+        switch (o.op) {
+          case 'q': stack.push(Object.assign({}, gs)); break;
+          case 'Q': if (stack.length) Object.assign(gs, stack.pop()); break;
+          case 'cm': if (a.length === 6) gs.ctm = mul(nums(a), gs.ctm); break;
+          case 'BT': tm = tlm = I6; break;
+          case 'Tf': if (a.length >= 2 && a[0].t === 'N') { gs.res = a[0].v; gs.fs = a[1].v; gs.font = this.fontFromResources(res, a[0].v); } break;
+          case 'Tc': gs.tc = a[0] ? a[0].v : 0; break;
+          case 'Tw': gs.tw = a[0] ? a[0].v : 0; break;
+          case 'Tz': gs.th = a[0] ? a[0].v / 100 : 1; break;
+          case 'TL': gs.tl = a[0] ? a[0].v : 0; break;
+          case 'Ts': gs.rise = a[0] ? a[0].v : 0; break;
+          case 'Tr': gs.tr = a[0] ? a[0].v : 0; break;
+          case 'Td': if (a.length === 2) { tlm = mul([1, 0, 0, 1, a[0].v, a[1].v], tlm); tm = tlm; } break;
+          case 'TD': if (a.length === 2) { gs.tl = -a[1].v; tlm = mul([1, 0, 0, 1, a[0].v, a[1].v], tlm); tm = tlm; } break;
+          case 'Tm': if (a.length === 6) { tm = tlm = nums(a); } break;
+          case 'T*': tlm = mul([1, 0, 0, 1, 0, -gs.tl], tlm); tm = tlm; break;
+          case "'": tlm = mul([1, 0, 0, 1, 0, -gs.tl], tlm); tm = tlm; if (a[0]) show([a[0]], i, o); break;
+          case '"': if (a.length === 3) { gs.tw = a[0].v; gs.tc = a[1].v; tlm = mul([1, 0, 0, 1, 0, -gs.tl], tlm); tm = tlm; show([a[2]], i, o); } break;
+          case 'Tj': if (a[0]) show([a[0]], i, o); break;
+          case 'TJ': if (a[0] && a[0].t === 'a') show(a[0].v, i, o); break;
+          case 'g': case 'rg': case 'k': gs.fill = serOp(o); gs.cs = ''; break;
+          case 'sc': case 'scn': gs.fill = serOp(o); break;
+          case 'cs': gs.cs = serOp(o); gs.fill = ''; break;
+          case 'BI': pg.hasImages = true; break;
+          case 'Do': {
+            if (!a[0] || a[0].t !== 'N' || !res) break;
+            const xd = res.lookup(Nm('XObject'));
+            if (!(xd instanceof PDFDict)) break;
+            const ref = xd.get(Nm(a[0].v));
+            const xo = this.ctx.lookup(ref);
+            if (!xo || !xo.dict) break;
+            const st = xo.dict.lookup(Nm('Subtype'));
+            if (st && st.decodeText() === 'Image') { pg.hasImages = true; break; }
+            if (!(ref instanceof PDFRef) || !st || st.decodeText() !== 'Form') break;
+            const mtx = xo.dict.lookup(Nm('Matrix'));
+            const m = mtx instanceof PDFArray && mtx.size() === 6 ? mtx.asArray().map(v => this.ctx.lookup(v).asNumber()) : I6;
+            const fres = xo.dict.lookup(Nm('Resources'));
+            const fc = this.formContainer(ref);
+            fc.res = fres instanceof PDFDict ? fres : null;
+            fc.parentRes = res;
+            this.interpret(fc, fres instanceof PDFDict ? fres : res, mul(m, gs.ctm), pg, depth + 1, useId + '/' + i);
+            break;
+          }
+        }
+      }
+    }
+
+    /* ----- grouping text into editable lines ----- */
+    makeGroups(runs, pageIndex) {
+      const clusters = [];
+      for (const r of runs) {
+        if (!r.pieces.length || r.hidden || !r.font.editable || !r.font.decodeUni) continue;
+        let best = null, bestD = Infinity;
+        for (const c of clusters) {
+          if (c.dead) continue;
+          const d = this.joinDist(c, [r]);
+          if (d !== null && d < bestD) { best = c; bestD = d; }
+        }
+        if (!best) { clusters.push(this.newCluster([r])); continue; }
+        this.absorb(best, [r]);
+        let again = true;
+        while (again) {
+          again = false;
+          for (const c of clusters) {
+            if (c === best || c.dead) continue;
+            if (this.joinDist(best, c.runs) !== null) { this.absorb(best, c.runs); c.dead = true; again = true; }
+          }
+        }
+      }
+      const groups = [];
+      for (const c of clusters) {
+        if (c.dead) continue;
+        const runsSorted = c.runs.slice().sort((a, b) => a.opIndex - b.opIndex);
+        const A = runsSorted[0];
+        const g = { A, runs: runsSorted, pieces: [], pageIndex, cont: A.cont, useId: A.useId, invA: inv(A.M0), size: 0 };
+        for (const r of runsSorted) this.addPieces(g, r, mul(r.M0, g.invA));
+        this.finishGroup(g);
+        groups.push(g);
+      }
+      groups.sort((a, b) => a.runs[0].opIndex - b.runs[0].opIndex);
+      return groups;
+    }
+    relOf(c, r) {
+      if (r.cont !== c.cont || r.useId !== c.useId) return null;
+      if (Math.abs(r.th - c.th) > 1e-3) return null;
+      const rel = mul(r.M0, c.invA);
+      const sx = rel[0], sy = rel[3];
+      if (sx <= 0 || sy <= 0) return null;
+      if (Math.abs(rel[1]) > 0.02 * sx || Math.abs(rel[2]) > 0.02 * sy || Math.abs(sx / sy - 1) > 0.05) return null;
+      return { x0: rel[4], x1: rel[4] + r.advance * sx, y: rel[5], size: r.fs * sy };
+    }
+    newCluster(runs) {
+      const r = runs[0];
+      const c = { runs: [], spans: [], cont: r.cont, useId: r.useId, th: r.th, invA: inv(r.M0), lo: Infinity, hi: -Infinity, size: 0 };
+      this.absorb(c, runs);
+      return c;
+    }
+    absorb(c, runs) {
+      for (const r of runs) {
+        const s = this.relOf(c, r);
+        if (!s) continue;
+        c.runs.push(r); c.spans.push(s);
+        c.lo = Math.min(c.lo, s.x0); c.hi = Math.max(c.hi, s.x1); c.size = Math.max(c.size, s.size);
+      }
+    }
+    // distance (in text units) between a cluster and some runs, or null if they are not on the same line
+    joinDist(c, runs) {
+      let lo = Infinity, hi = -Infinity, size = c.size;
+      const spans = [];
+      for (const r of runs) {
+        const s = this.relOf(c, r);
+        if (!s) return null;
+        spans.push(s);
+        lo = Math.min(lo, s.x0); hi = Math.max(hi, s.x1); size = Math.max(size, s.size);
+      }
+      for (const s of spans) {
+        if (Math.abs(s.y) > 0.6 * size) return null;
+        const w = Math.max(s.x1 - s.x0, 1e-6);
+        for (const t of c.spans) {
+          const ov = Math.min(s.x1, t.x1) - Math.max(s.x0, t.x0);
+          if (ov > 0.1 * size && ov > 0.7 * Math.min(w, t.x1 - t.x0)) return null;
+        }
+      }
+      const d = Math.max(0, lo - c.hi, c.lo - hi);
+      return d > 1.5 * size ? null : d;
+    }
+    addPieces(g, r, rel) {
+      const sx = rel[0], sy = rel[3];
+      const size = r.fs * sy;
+      for (const p of r.pieces) {
+        g.pieces.push({ text: p.text, code: p.code, font: r.font, res: r.res, size, x: rel[4] + p.x * sx, adv: p.adv * sx, yOff: rel[5] + r.rise * sy, fill: r.fill, run: r });
+      }
+      g.size = Math.max(g.size, size);
+    }
+    finishGroup(g) {
+      g.pieces.sort((a, b) => a.x - b.x);
+      const out = [];
+      for (const p of g.pieces) {
+        const prev = out[out.length - 1];
+        if (prev) {
+          const end = prev.x + prev.adv, gap = p.x - end;
+          const sz = Math.max(prev.size || 0, p.size);
+          if (gap > 0.15 * sz && !/\s$/.test(prev.text) && !/^\s/.test(p.text)) out.push({ text: ' ', synthetic: true, x: end, adv: gap, size: sz });
+        }
+        out.push(p);
+      }
+      g.pieces = out;
+      g.text = out.map(p => p.text).join('');
+      const A = g.A;
+      g.key = g.cont.key + ':' + A.opIndex;
+      // geometry
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      const fontCount = new Map();
+      for (const p of out) {
+        x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x + p.adv);
+        if (p.synthetic) continue;
+        const [as, ds] = this.fontAscDesc(p.font);
+        y0 = Math.min(y0, p.yOff + p.size * ds); y1 = Math.max(y1, p.yOff + p.size * as);
+        fontCount.set(p.font, (fontCount.get(p.font) || 0) + 1);
+      }
+      g.quad = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => apply(A.M0, x, y));
+      g.box = [x0, y0, x1, y1];
+      g.fonts = [...fontCount.keys()];
+      g.mainFont = [...fontCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      g.userSize = g.size * Math.hypot(A.M0[2], A.M0[3]);
+      g.width = x1 - x0;
+      const prevG = this.groups.get(g.key);
+      if (prevG) g.alias = prevG; else this.groups.set(g.key, g);
+    }
+
+    /* ----- choosing fonts for typed characters ----- */
+    fontClass(f) {
+      if (!f) return null;
+      if (f.kind === 'std') return /^Times/.test(f.name) ? 'serif' : /^Courier/.test(f.name) ? 'mono' : /^Helvetica/.test(f.name) ? 'sans' : null;
+      if (f._cls !== undefined) return f._cls;
+      const n = ((f.baseName || '') + ' ' + (f.names ? [f.names.ps, f.names.family].join(' ') : '')).toLowerCase().replace(/[^a-z\u3000-\u9fff ]/g, '');
+      let c = null;
+      if (/mono|courier|consol|typewriter|cursor|\bcode/.test(n) || (f.flags & 1)) c = 'mono';
+      else if (/sans|arial|helvet|heros|calibri|verdana|tahoma|segoe|gothic|hei|carlito|inter|roboto|futura|gill|frutiger|myriad|lato|adventor|biolinumo?|yahei|jhenghei|pingfang|黑/.test(n)) c = 'sans';
+      else if (/serif|times|termes|roman|georgia|garamond|cambria|book|minion|caladea|ming|song|sung|kai|mincho|batang|palatino|pagella|bonum|schola|century|lmroman|libertine|明|宋|楷/.test(n) || (f.flags & 2)) c = 'serif';
+      f._cls = c;
+      return c;
+    }
+    candidateFonts(ch, styleFont, g) {
+      const cp = ch.codePointAt(0);
+      const cjk = isCJKChar(cp);
+      const out = [];
+      const seen = new Set();
+      const push = (f, tier) => { if (f && !seen.has(f)) { seen.add(f); out.push({ f, tier }); } };
+      const cls = this.fontClass(styleFont);
+      const compat = f => { const c = this.fontClass(f); return !cls || !c || c === cls; };
+      const scriptSort = list => list.slice().sort((a, b) => ((cjk !== !!a.isCJK) - (cjk !== !!b.isCJK)));
+      const groupFonts = [styleFont, ...g.fonts];
+      for (const f of scriptSort(groupFonts)) push(f, 1);
+      for (const f of scriptSort(groupFonts)) if (f.local) push(f.local, 2);
+      const fam = n => (n || '').replace(/[-,](Regular|Roman|Book|Medium|Bold|Italic|Oblique|BoldItalic|BoldOblique)$/i, '').toLowerCase();
+      const docFonts = this.fontList.filter(f => f.editable && f.decodeUni && !seen.has(f));
+      const score = f => ((cjk !== !!f.isCJK) ? 4 : 0) + ((!!f.bold !== !!styleFont.bold) ? 2 : 0) + ((!!f.italic !== !!styleFont.italic) ? 1 : 0);
+      for (const f of docFonts.filter(f => fam(f.baseName) === fam(styleFont.baseName)).sort((a, b) => score(a) - score(b))) push(f, 3);
+      for (const f of docFonts.filter(compat).sort((a, b) => score(a) - score(b))) push(f, 3);
+      for (const f of this.fontList) if (f.local && compat(f.local)) push(f.local, 4);
+      const same = this.fallbacks.filter(f => !!f.isCJK === cjk), other = this.fallbacks.filter(f => !!f.isCJK !== cjk);
+      for (const f of same) push(f, 4);
+      push(this.stdFont(styleFont.kind === 'pdf' ? stdNameFor(styleFont.baseName, styleFont.flags, styleFont.bold, styleFont.italic) : 'Helvetica'), 5);
+      push(this.stdFont('Symbol'), 5);
+      for (const f of docFonts.sort((a, b) => score(a) - score(b))) push(f, 3);
+      for (const f of this.fontList) if (f.local) push(f.local, 4);
+      for (const f of other) push(f, 4);
+      return out;
+    }
+    stdFont(name) {
+      if (!this.stdFonts.has(name)) this.stdFonts.set(name, { kind: 'std', name, id: 's' + name, label: name + ' (standard)', isCJK: false, baseName: name, bold: /Bold/.test(name), italic: /Italic|Oblique/.test(name) });
+      return this.stdFonts.get(name);
+    }
+    pickFont(ch, styleFont, g) {
+      for (const { f, tier } of this.candidateFonts(ch, styleFont, g)) {
+        const code = this.codeFor(f, ch);
+        if (code !== null && code !== undefined) return { font: f, code, tier };
+      }
+      return null;
+    }
+
+    /* ----- planning an edit ----- */
+    // align old pieces with new characters (longest common subsequence)
+    align(old, chars) {
+      const n = old.length, m = chars.length;
+      const ops = [];
+      if (n * m > 4e6) {
+        let p = 0; while (p < n && p < m && old[p].text === chars[p]) p++;
+        let q = 0; while (q < n - p && q < m - p && old[n - 1 - q].text === chars[m - 1 - q]) q++;
+        for (let i = 0; i < p; i++) ops.push({ t: 'eq', i, j: i });
+        for (let i = p; i < n - q; i++) ops.push({ t: 'del', i });
+        for (let j = p; j < m - q; j++) ops.push({ t: 'ins', j });
+        for (let k = q; k > 0; k--) ops.push({ t: 'eq', i: n - k, j: m - k });
+        return ops;
+      }
+      const W = m + 1, L = new Uint16Array((n + 1) * W);
+      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+        L[i * W + j] = old[i].text === chars[j] ? L[(i + 1) * W + j + 1] + 1 : Math.max(L[(i + 1) * W + j], L[i * W + j + 1]);
+      let i = 0, j = 0;
+      while (i < n || j < m) {
+        if (i < n && j < m && old[i].text === chars[j]) { ops.push({ t: 'eq', i, j }); i++; j++; }
+        else if (i < n && (j >= m || L[(i + 1) * W + j] >= L[i * W + j + 1])) { ops.push({ t: 'del', i }); i++; }
+        else { ops.push({ t: 'ins', j }); j++; }
+      }
+      return ops;
+    }
+
+    plan(g, newText, fit) {
+      g = g.alias || g;
+      const old = g.pieces, n = old.length, A = g.A, th = A.th;
+      newText = newText.replace(/[\r\n\t]+/g, ' ');
+      const chars = Array.from(newText);
+      const ops = this.align(old, chars);
+      // split into equal pieces and change blocks
+      const seq = [];
+      for (const o of ops) {
+        if (o.t === 'eq') seq.push(o);
+        else {
+          let last = seq[seq.length - 1];
+          if (!last || last.t !== 'blk') { last = { t: 'blk', dels: [], ins: [] }; seq.push(last); }
+          if (o.t === 'del') last.dels.push(o.i); else last.ins.push(chars[o.j]);
+        }
+      }
+      const missing = [], uses = [];
+      const firstReal = old.find(x => !x.synthetic);
+      // pick fonts for inserted characters
+      let leftReal = null;
+      for (const el of seq) {
+        if (el.t === 'eq') { if (!old[el.i].synthetic) leftReal = old[el.i]; continue; }
+        const delReal = el.dels.map(i => old[i]).find(x => !x.synthetic);
+        let after = null;
+        const lastIdx = el.dels.length ? el.dels[el.dels.length - 1] : -1;
+        const nextEq = seq[seq.indexOf(el) + 1];
+        if (nextEq && nextEq.t === 'eq') { for (let k = nextEq.i; k < n; k++) if (!old[k].synthetic) { after = old[k]; break; } }
+        const style = delReal || leftReal || after || firstReal;
+        el.style = style;
+        el.items = [];
+        for (const ch of el.ins) {
+          const cp = ch.codePointAt(0);
+          if (ch === ' ' || ch === '\u00a0') {
+            const c = this.codeFor(style.font, ' ');
+            if (c !== null && c !== undefined) el.items.push({ code: c, font: style.font, ch: ' ', w: this.fontW0(style.font, c) * style.size * th });
+            else el.items.push({ gap: true, w: 0.28 * style.size * th });
+            continue;
+          }
+          if (cp >= PUA && cp < PUA + 0x10000) {
+            const c = style.font.uniToCode && style.font.uniToCode.get(ch);
+            if (c !== undefined) { el.items.push({ code: c, font: style.font, w: this.fontW0(style.font, c) * style.size * th }); continue; }
+            if (!missing.includes(ch)) missing.push(ch);
+            continue;
+          }
+          const pick = this.pickFont(ch, style.font, g);
+          if (!pick) { if (!missing.includes(ch)) missing.push(ch); continue; }
+          el.items.push({ code: pick.code, font: pick.font, w: this.fontW0(pick.font, pick.code) * style.size * th });
+          uses.push({ ch, font: pick.font, tier: pick.tier });
+        }
+      }
+      const origEnd = n ? Math.max(...old.map(o => o.x + o.adv)) : 0;
+      const layout = s => {
+        const items = [];
+        let shift = 0, prevEnd = n ? old[0].x : 0, sumIns = 0;
+        for (let k = 0; k < seq.length; k++) {
+          const el = seq[k];
+          if (el.t === 'eq') {
+            const o = old[el.i], x = o.x + shift;
+            if (!o.synthetic) items.push(Object.assign({}, o, { orig: true, x }));
+            prevEnd = x + o.adv;
+            continue;
+          }
+          const x0 = el.dels.length ? old[el.dels[0]].x + shift : prevEnd;
+          let cx = x0;
+          for (const it of el.items) {
+            if (!it.gap) items.push({ code: it.code, font: it.font, size: el.style.size, yOff: el.style.yOff, fill: el.style.fill, x: cx, th: th * s, isNew: true, text: it.ch });
+            cx += it.w * s; sumIns += it.w;
+          }
+          const lastDel = el.dels.length ? el.dels[el.dels.length - 1] : -1;
+          let nextOrig;
+          if (lastDel >= 0) nextOrig = lastDel + 1 < n ? old[lastDel + 1].x : old[lastDel].x + old[lastDel].adv;
+          else {
+            const nx = seq[k + 1];
+            nextOrig = nx && nx.t === 'eq' ? old[nx.i].x : (x0 - shift);
+          }
+          shift = cx - nextOrig;
+          prevEnd = cx;
+        }
+        return { items, shift, sumIns };
+      };
+      const res = layout(1);
+      let s = 1, grow = res.shift;
+      if (fit && res.shift > 0.01) { s = this.squeeze(res.items, origEnd, th); grow = 0; }
+      return { group: g, items: res.items, missing, uses, changed: newText !== g.text, text: newText, squeeze: s, grow };
+    }
+
+    // make a line that grew fit its old length: tighten word gaps first, then narrow the letters a little
+    squeeze(items, origEnd, th) {
+      if (!items.length) return 1;
+      items.sort((a, b) => a.x - b.x);
+      const w = items.map(it => {
+        const code = it.orig ? this.codeNum(it.code) : it.code;
+        return this.fontW0(it.font, code) * it.size * (it.th || th);
+      });
+      const n = items.length, x0 = items[0].x;
+      const newEnd = Math.max(...items.map((it, i) => it.x + w[i]));
+      const need = newEnd - origEnd;
+      if (need <= 0.01) return 1;
+      const cap = new Array(n).fill(0);
+      for (let i = 0; i < n - 1; i++) {
+        if (items[i].text === ' ') cap[i] += 0.45 * w[i];
+        const gap = items[i + 1].x - (items[i].x + w[i]);
+        if (gap > 0.12 * items[i].size) cap[i] += 0.45 * gap;
+      }
+      const total = cap.reduce((a, b) => a + b, 0);
+      const k = total > 0 ? Math.min(1, need / total) : 0;
+      let cum = 0;
+      for (let i = 0; i < n; i++) { items[i].x -= cum; cum += cap[i] * k; }
+      const rest = need - total * k;
+      if (rest <= 0.01) return 1;
+      const span = newEnd - cum - x0;
+      const s = Math.max(0.6, (span - rest) / span);
+      for (const it of items) { it.x = x0 + (it.x - x0) * s; it.th = (it.th || th) * s; }
+      return s;
+    }
+
+    // characters in the new text that will be drawn with a different font than the line's own
+    describePlan(pl) {
+      const subs = new Map();
+      for (const u of pl.uses) if (u.tier >= 2) {
+        const label = this.fontLabel(u.font);
+        if (!subs.has(label)) subs.set(label, { label, chars: [], tier: u.tier, font: u.font });
+        if (!subs.get(label).chars.includes(u.ch)) subs.get(label).chars.push(u.ch);
+      }
+      return [...subs.values()];
+    }
+    fontLabel(f) {
+      if (!f) return '';
+      if (f.kind === 'std') return f.name.replace('-Roman', '') + ' (built-in look-alike)';
+      if (f.kind === 'ttf') return f.label;
+      return f.baseName;
+    }
+
+    /* ----- resources ----- */
+    ownResources(cont) {
+      if (cont.kind === 'page') {
+        const node = cont.node;
+        let r = node.get(Nm('Resources'));
+        let rd = this.ctx.lookup(r);
+        if (!(rd instanceof PDFDict)) {
+          const inh = node.Resources();
+          rd = inh ? inh.clone(this.ctx) : this.ctx.obj({});
+          node.set(Nm('Resources'), rd);
+        }
+        return rd;
+      }
+      const dict = cont.origStream.dict;
+      let rd = dict.lookup(Nm('Resources'));
+      if (!(rd instanceof PDFDict)) {
+        rd = cont.parentRes ? cont.parentRes.clone(this.ctx) : this.ctx.obj({});
+        dict.set(Nm('Resources'), rd);
+      }
+      return rd;
+    }
+    resNameFor(cont, font) {
+      const ref = this.fontRef(font);
+      const rd = this.ownResources(cont);
+      let fd = rd.get(Nm('Font'));
+      let fdict = this.ctx.lookup(fd);
+      if (!(fdict instanceof PDFDict)) { fdict = this.ctx.obj({}); rd.set(Nm('Font'), fdict); }
+      else if (fd instanceof PDFRef) { fdict = fdict.clone(this.ctx); rd.set(Nm('Font'), fdict); }
+      for (const [k, v] of fdict.entries()) if (v === ref || (v instanceof PDFRef && v.toString() === ref.toString())) return k.decodeText();
+      let i = 1; while (fdict.has(Nm('EdF' + i))) i++;
+      fdict.set(Nm('EdF' + i), ref);
+      return 'EdF' + i;
+    }
+    fontRef(font) {
+      if (font.kind === 'pdf') return font.ref;
+      if (font.ref) return font.ref;
+      if (font.kind === 'std') {
+        const d = { Type: 'Font', Subtype: 'Type1', BaseFont: font.name };
+        if (font.name !== 'Symbol') d.Encoding = 'WinAnsiEncoding';
+        font.ref = this.ctx.register(this.ctx.obj(d));
+        return font.ref;
+      }
+      font.ref = this.ctx.nextRef();
+      return font.ref;
+    }
+
+    /* ----- writing ----- */
+    emit(pl, cont, usedSink) {
+      const g = pl.group, A = g.A;
+      const parts = [];
+      if (A.op === "'") parts.push('T*');
+      if (A.op === '"') parts.push(fmt(A.tw) + ' Tw ' + fmt(A.tc) + ' Tc T*');
+      parts.push('0 Tc 0 Tw');
+      const st = { res: A.res, size: A.fs, rise: A.rise, fill: A.fill, th: A.th };
+      let pos = 0, tj = [];
+      const flush = () => { if (tj.length) { parts.push('[' + tj.join(' ') + '] TJ'); tj = []; } };
+      const resCache = new Map();
+      const resOf = it => {
+        if (it.orig && it.res) return it.res;
+        if (!resCache.has(it.font)) resCache.set(it.font, this.resNameFor(cont, it.font));
+        return resCache.get(it.font);
+      };
+      for (const it of pl.items) {
+        const res = resOf(it);
+        const th = it.th || A.th;
+        if (res !== st.res || Math.abs(it.size - st.size) > 1e-6) { flush(); parts.push('/' + escName(res) + ' ' + fmt(it.size) + ' Tf'); st.res = res; st.size = it.size; }
+        if (Math.abs(it.yOff - st.rise) > 1e-6) { flush(); parts.push(fmt(it.yOff) + ' Ts'); st.rise = it.yOff; }
+        if (it.fill !== st.fill) { flush(); parts.push(it.fill || '0 g'); st.fill = it.fill; }
+        if (Math.abs(th - st.th) > 1e-6) { flush(); parts.push(fmt(th * 100) + ' Tz'); st.th = th; }
+        const dx = it.x - pos;
+        if (Math.abs(dx) > 1e-4 && st.size > 0) tj.push(fmt(-dx * 1000 / (st.size * st.th)));
+        let bytes, w0;
+        if (it.orig) { bytes = it.code; w0 = this.fontW0(it.font, this.codeNum(it.code)); }
+        else {
+          bytes = this.fontCodeBytes(it.font, it.code); w0 = this.fontW0(it.font, it.code);
+          if (it.font.kind === 'ttf') { if (!usedSink.has(it.font)) usedSink.set(it.font, new Set()); usedSink.get(it.font).add(it.code); }
+        }
+        if (it.orig && it.font.kind === 'pdf' && it.font.type3) w0 = it.font.w0(this.codeNum(it.code));
+        tj.push(hex(bytes));
+        pos = it.x + w0 * st.size * st.th;
+      }
+      flush();
+      // restore the state the rest of the page expects
+      if (st.res !== A.res || Math.abs(st.size - A.fs) > 1e-6) parts.push('/' + escName(A.res) + ' ' + fmt(A.fs) + ' Tf');
+      if (Math.abs(st.rise - A.rise) > 1e-6) parts.push(fmt(A.rise) + ' Ts');
+      if (st.fill !== A.fill) parts.push(A.fill || '0 g');
+      if (Math.abs(st.th - A.th) > 1e-6) parts.push(fmt(A.th * 100) + ' Tz');
+      parts.push(fmt(A.tc) + ' Tc ' + fmt(A.tw) + ' Tw');
+      const rest = A.advance - pos;
+      if (Math.abs(rest) > 1e-4 && A.fs) parts.push('[' + fmt(-rest * 1000 / (A.fs * A.th)) + '] TJ');
+      const repl = new Map();
+      repl.set(A.opIndex, parts.join('\n'));
+      for (const r of g.runs) {
+        if (r === A) continue;
+        let s = '';
+        if (r.op === "'") s = 'T* ';
+        if (r.op === '"') s = fmt(r.tw) + ' Tw ' + fmt(r.tc) + ' Tc T* ';
+        s += r.fs ? '[' + fmt(-r.advance * 1000 / (r.fs * r.th)) + '] TJ' : '';
+        repl.set(r.opIndex, s);
+      }
+      return repl;
+    }
+    codeNum(bytes) { let c = 0; for (const b of bytes) c = c * 256 + b; return c >>> 0; }
+
+    rebuild(cont) {
+      const plans = [];
+      for (const [key, e] of this.edits) {
+        const g = this.groups.get(key);
+        if (g && g.cont === cont) { const pl = this.plan(g, e.text, e.fit); g.grow = pl.grow; plans.push(pl); }
+      }
+      cont.used = new Map();
+      if (!plans.length) {
+        if (cont.kind === 'page') cont.node.set(Nm('Contents'), cont.origContents);
+        else this.ctx.assign(cont.ref, cont.origStream);
+        return;
+      }
+      const repl = new Map();
+      for (const pl of plans) for (const [k, v] of this.emit(pl, cont, cont.used)) repl.set(k, v);
+      const pieces = [];
+      let last = 0;
+      const ops = cont.ops;
+      const idxs = [...repl.keys()].sort((a, b) => a - b);
+      for (const i of idxs) {
+        const o = ops[i];
+        pieces.push(cont.bytes.subarray(last, o.start));
+        pieces.push(enc('\n' + repl.get(i) + '\n'));
+        last = o.end;
+      }
+      pieces.push(cont.bytes.subarray(last));
+      let len = 0; pieces.forEach(x => len += x.length);
+      const out = new Uint8Array(len);
+      let o = 0; pieces.forEach(x => { out.set(x, o); o += x.length; });
+      if (cont.kind === 'page') {
+        if (!cont.newRef) cont.newRef = this.ctx.nextRef();
+        this.ctx.assign(cont.newRef, this.ctx.flateStream(out));
+        cont.node.set(Nm('Contents'), cont.newRef);
+      } else {
+        const s = this.ctx.flateStream(out);
+        for (const [k, v] of cont.origStream.dict.entries()) {
+          const kn = k.decodeText();
+          if (['Length', 'Filter', 'DecodeParms', 'DL'].includes(kn)) continue;
+          s.dict.set(k, v);
+        }
+        this.ctx.assign(cont.ref, s);
+      }
+    }
+
+    /* ----- public editing API ----- */
+    // changes: [{ key, text, fit }] — applied together, undone together
+    setEdits(changes) {
+      const hist = [], conts = new Set();
+      for (const ch of changes) {
+        const g0 = this.groups.get(ch.key);
+        if (!g0) continue;
+        hist.push({ key: ch.key, prev: this.edits.has(ch.key) ? Object.assign({}, this.edits.get(ch.key)) : null });
+        if (ch.text === g0.text) this.edits.delete(ch.key);
+        else this.edits.set(ch.key, { text: ch.text, fit: !!ch.fit });
+        conts.add(g0.cont);
+      }
+      if (!hist.length) return [];
+      this.history.push(hist);
+      for (const c of conts) this.rebuild(c);
+      return [...conts];
+    }
+    setEdit(key, text, fit) { return this.setEdits([{ key, text, fit }]); }
+    clearEdit(key) { const g = this.groups.get(key); return g ? this.setEdits([{ key, text: g.text }]) : []; }
+    undo() {
+      const hist = this.history.pop();
+      if (!hist) return null;
+      const conts = new Set();
+      for (const h of hist) {
+        if (h.prev) this.edits.set(h.key, h.prev); else this.edits.delete(h.key);
+        conts.add(this.groups.get(h.key).cont);
+      }
+      for (const c of conts) this.rebuild(c);
+      return { keys: hist.map(h => h.key), conts: [...conts] };
+    }
+    rebuildAll() {
+      const conts = new Set();
+      for (const key of this.edits.keys()) conts.add(this.groups.get(key).cont);
+      for (const c of conts) this.rebuild(c);
+      return [...conts];
+    }
+    // outline of a line, stretched if an edit made it longer
+    displayQuad(g) {
+      const [x0, y0, x1, y1] = g.box;
+      const c = g.alias || g;
+      const x2 = this.edits.has(g.key) ? Math.max(x0 + 1, x1 + (c.grow || 0)) : x1;
+      return [[x0, y0], [x2, y0], [x2, y1], [x0, y1]].map(([x, y]) => apply(g.A.M0, x, y));
+    }
+    currentText(key) { const e = this.edits.get(key); return e ? e.text : this.groups.get(key).text; }
+    pagesOfContainer(cont) {
+      const out = new Set();
+      for (const pg of this.pages) for (const g of pg.groups) if (g.cont === cont) out.add(pg.index);
+      return [...out];
+    }
+
+    /* ----- fonts supplied by the user ----- */
+    addTrueType(bytes, index = 0) {
+      const sf = Sfnt.open(bytes, index);
+      const tag = 'ED' + String.fromCharCode(65 + (this.uid % 26), 65 + ((this.uid * 7) % 26), 65 + ((this.uid * 13) % 26), 65 + ((this.uid * 3) % 26));
+      this.uid++;
+      const ps = (sf.names.ps || 'Font').replace(/[^\x21-\x7E]|[#()<>[\]{}/%]/g, '');
+      const f = {
+        kind: 'ttf', id: 't' + this.uid, sfnt: sf, label: sf.names.zhFull || sf.names.full || ps, psName: ps,
+        names: sf.names, isCJK: false, bold: sf.bold, italic: sf.italic, baseName: sf.names.full, tag,
+      };
+      for (const cp of [0x4E00, 0x7684, 0x5B57, 0x3002]) if (Sfnt.glyphFor(sf, cp)) { f.isCJK = true; break; }
+      const g2c = sf.isCFF ? Sfnt.cffGidToCid(sf) : null;
+      f.cidOf = gid => g2c ? g2c[gid] : gid;
+      f.sizeMB = bytes.length / 1048576;
+      return f;
+    }
+    addFallback(font) { if (!this.fallbacks.includes(font)) this.fallbacks.push(font); }
+
+    finalizeFonts() {
+      const all = new Map();
+      for (const c of this.containers.values()) for (const [f, set] of c.used) {
+        if (!all.has(f)) all.set(f, new Set());
+        for (const g of set) all.get(f).add(g);
+      }
+      for (const [f, gids] of all) this.writeTrueType(f, [...gids].sort((a, b) => a - b));
+    }
+    writeTrueType(f, gids) {
+      const ctx = this.ctx, sf = f.sfnt;
+      const ref = this.fontRef(f);
+      const upem = sf.upem, k = 1000 / upem;
+      const base = f.tag + '+' + f.psName;
+      let fileStream, cidType;
+      if (sf.isCFF) {
+        fileStream = ctx.flateStream(Sfnt.standalone(sf), { Subtype: 'OpenType' });
+        cidType = 'CIDFontType0';
+      } else {
+        const sub = Sfnt.subsetTrueType(sf, gids);
+        fileStream = ctx.flateStream(sub, { Length1: sub.length });
+        cidType = 'CIDFontType2';
+      }
+      const fileRef = ctx.register(fileStream);
+      const flags = 4 | (f.italic ? 64 : 0);
+      const desc = ctx.obj({
+        Type: 'FontDescriptor', FontName: base, Flags: flags,
+        FontBBox: sf.bbox.map(v => Math.round(v * k)), ItalicAngle: sf.italicAngle,
+        Ascent: Math.round(sf.ascender * k), Descent: Math.round(sf.descender * k), CapHeight: Math.round(sf.capHeight * k), StemV: 80,
+      });
+      desc.set(Nm(sf.isCFF ? 'FontFile3' : 'FontFile2'), fileRef);
+      const W = [];
+      for (const g of gids) { W.push(f.cidOf(g)); W.push([Math.round(Sfnt.advance(sf, g) * k)]); }
+      const cidFont = ctx.obj({
+        Type: 'Font', Subtype: cidType, BaseFont: base,
+        CIDSystemInfo: { Registry: PDFLib.PDFString.of('Adobe'), Ordering: PDFLib.PDFString.of('Identity'), Supplement: 0 },
+        FontDescriptor: ctx.register(desc), DW: 1000, W,
+      });
+      if (!sf.isCFF) cidFont.set(Nm('CIDToGIDMap'), Nm('Identity'));
+      // ToUnicode
+      const rev = new Map();
+      sf.forEachMapping((cp, gid) => { if (!rev.has(gid)) rev.set(gid, cp); });
+      const lines = [];
+      for (const g of gids) if (rev.has(g)) {
+        const s = String.fromCodePoint(rev.get(g));
+        let h = ''; for (let i = 0; i < s.length; i++) h += s.charCodeAt(i).toString(16).padStart(4, '0');
+        lines.push('<' + f.cidOf(g).toString(16).padStart(4, '0') + '> <' + h + '>');
+      }
+      let cmap = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n';
+      for (let i = 0; i < lines.length; i += 100) {
+        const chunk = lines.slice(i, i + 100);
+        cmap += chunk.length + ' beginbfchar\n' + chunk.join('\n') + '\nendbfchar\n';
+      }
+      cmap += 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n';
+      const type0 = ctx.obj({
+        Type: 'Font', Subtype: 'Type0', BaseFont: base, Encoding: 'Identity-H',
+        DescendantFonts: [ctx.register(cidFont)], ToUnicode: ctx.register(ctx.flateStream(enc(cmap))),
+      });
+      ctx.assign(ref, type0);
+    }
+
+    async save() {
+      this.finalizeFonts();
+      return this.pdf.save({ useObjectStreams: true });
+    }
+  }
+
+  return { Doc, stdNameFor, isCJKChar, PUA, lex, parseToUnicode };
+})();
+
+</script>
+<script>
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const PDFJS_OPTS = {
+  cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+  cMapPacked: true,
+  standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/',
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const S = { doc: null, name: '', pjs: null, zoom: 1, fit: 1, pages: [], active: null, busy: Promise.resolve(), localList: null, extra: [], hits: new Set() };
+const PUA = PdfTextEngine.PUA;
+const showText = t => Array.from(t).map(c => { const cp = c.codePointAt(0); return cp >= PUA ? '□' : c; }).join('');
+const toEdit = t => t; // the input keeps placeholders as private-use characters
+
+/* ---------- loading ---------- */
+$('drop').onclick = () => $('file').click();
+$('drop').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
+['dragover', 'dragenter'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => { const f = [...e.dataTransfer.files].find(f => /pdf$/i.test(f.name) || f.type === 'application/pdf'); if (f) openFile(f); });
+$('file').onchange = () => { if ($('file').files[0]) openFile($('file').files[0]); $('file').value = ''; };
+$('newBtn').onclick = () => { if (S.doc && S.doc.edits.size && !confirm('Discard your changes and open another PDF?')) return; $('file').click(); };
+
+function setMsg(el, text, kind) { el.className = 'msg ' + (kind || ''); el.innerHTML = text || ''; }
+function status(html) { $('status').innerHTML = html || ''; }
+
+async function openFile(file) {
+  setMsg($('loadMsg'), '<span class="spin"></span> Reading ' + esc(file.name) + '…', 'ok');
+  try {
+    if (!window.PDFLib || !window.pdfjsLib) throw new Error('The PDF libraries did not load. Check your internet connection and reload the page.');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const doc = await PdfTextEngine.Doc.load(bytes.slice());
+    if (doc.encrypted) throw new Error('This PDF is password-protected (encrypted), so its text can\'t be changed. Remove the protection first — e.g. open it and "Print to PDF" — then try again.');
+    const pjs = await pdfjsLib.getDocument(Object.assign({ data: bytes.slice() }, PDFJS_OPTS)).promise;
+    if (S.pjs) S.pjs.destroy();
+    Object.assign(S, { doc, pjs, name: file.name.replace(/\.pdf$/i, ''), active: null, extra: [], hits: new Set() });
+    const nGroups = doc.pages.reduce((a, p) => a + p.groups.length, 0);
+    setMsg($('loadMsg'), '');
+    $('pick').style.display = 'none';
+    $('editor').classList.add('on');
+    $('fname').innerHTML = esc(file.name) + '<small>' + doc.pages.length + ' page' + (doc.pages.length > 1 ? 's' : '') + ' · ' + nGroups + ' editable line' + (nGroups === 1 ? '' : 's') + '</small>';
+    if (!nGroups) status('<span class="st-warn" style="padding:4px 8px;border-radius:6px">No editable text found — this looks like a scanned PDF (pictures of pages).</span>');
+    else status('');
+    await buildPages();
+    renderSide();
+    renderFonts();
+    updateButtons();
+  } catch (e) {
+    console.error(e);
+    setMsg($('loadMsg'), esc(e.message || String(e)), 'err');
+  }
+}
+
+/* ---------- pages ---------- */
+let observer = null;
+async function buildPages() {
+  const desk = $('desk');
+  desk.innerHTML = '';
+  S.pages = [];
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver(ents => { for (const e of ents) if (e.isIntersecting) renderPage(+e.target.dataset.i); }, { root: null, rootMargin: '600px 0px' });
+  let maxW = 0;
+  for (let i = 0; i < S.pjs.numPages; i++) {
+    const page = await S.pjs.getPage(i + 1);
+    const base = page.getViewport({ scale: 1 });
+    maxW = Math.max(maxW, base.width);
+    const wrap = document.createElement('div');
+    wrap.className = 'page'; wrap.dataset.i = i;
+    wrap.innerHTML = '<div class="num">Page ' + (i + 1) + '</div><canvas></canvas><div class="ov"></div><div class="busy"><span><span class="spin"></span> Updating…</span></div>';
+    desk.appendChild(wrap);
+    const P = { i, base, wrap, canvas: wrap.querySelector('canvas'), ov: wrap.querySelector('.ov'), rendered: 0, seq: 0, boxes: new Map() };
+    S.pages.push(P);
+    if (!S.doc.pages[i] || !S.doc.pages[i].groups.length) {
+      const n = document.createElement('div'); n.className = 'note'; n.textContent = 'No editable text on this page'; wrap.appendChild(n);
+    }
+  }
+  const avail = Math.max(280, desk.clientWidth - 32);
+  S.fit = Math.min(1.6, avail / maxW);
+  layoutPages();
+  S.pages.forEach(P => observer.observe(P.wrap));
+}
+
+function layoutPages() {
+  const scale = S.fit * S.zoom;
+  $('zoomVal').textContent = Math.round(S.zoom * 100) + '%';
+  for (const P of S.pages) {
+    P.scale = scale;
+    P.vp = P.base.clone({ scale });
+    P.wrap.style.width = P.vp.width + 'px';
+    P.wrap.style.height = P.vp.height + 'px';
+    P.rendered = 0;
+    drawBoxes(P);
+  }
+  closePop();
+}
+
+async function renderPage(i, force) {
+  const P = S.pages[i];
+  if (!P || (P.rendered === P.scale && !force)) return;
+  const seq = ++P.seq;
+  const pjs = S.pjs;
+  try {
+    const page = await pjs.getPage(i + 1);
+    const vp = page.getViewport({ scale: P.scale });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(vp.width * dpr); c.height = Math.ceil(vp.height * dpr);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
+    if (seq !== P.seq || pjs !== S.pjs) return;
+    P.canvas.replaceWith(c); P.canvas = c;
+    P.rendered = P.scale;
+  } catch (e) { if (pjs === S.pjs) console.warn(e); }
+}
+
+function drawBoxes(P) {
+  P.ov.innerHTML = '';
+  P.boxes.clear();
+  const pg = S.doc.pages[P.i];
+  if (!pg) return;
+  for (const g of pg.groups) {
+    const pts = S.doc.displayQuad(g).map(([x, y]) => P.vp.convertToViewportPoint(x, y));
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const l = Math.min(...xs), t = Math.min(...ys), w = Math.max(...xs) - l, h = Math.max(...ys) - t;
+    if (w < 1 || h < 1) continue;
+    const b = document.createElement('div');
+    b.className = 'tb';
+    b.tabIndex = 0;
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', 'Edit: ' + showText(g.text));
+    b.style.cssText = `left:${l - 1}px;top:${t - 1}px;width:${w + 2}px;height:${h + 2}px`;
+    b.dataset.key = g.key;
+    b.onclick = e => { e.stopPropagation(); openPop(P, g, b); };
+    b.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); openPop(P, g, b); } };
+    P.ov.appendChild(b);
+    if (!P.boxes.has(g.key)) P.boxes.set(g.key, []);
+    P.boxes.get(g.key).push(b);
+  }
+  markBoxes(P);
+}
+function markBoxes(P) {
+  for (const [key, list] of P.boxes) for (const b of list) {
+    b.classList.toggle('edited', S.doc.edits.has(key));
+    b.classList.toggle('hit', S.hits.has(key));
+  }
+  P.ov.classList.toggle('show', $('showAll').checked);
+}
+$('showAll').onchange = () => S.pages.forEach(markBoxes);
+$('zoomIn').onclick = () => { S.zoom = Math.min(4, +(S.zoom * 1.25).toFixed(3)); layoutPages(); S.pages.forEach(P => isVisible(P) && renderPage(P.i)); };
+$('zoomOut').onclick = () => { S.zoom = Math.max(0.4, +(S.zoom / 1.25).toFixed(3)); layoutPages(); S.pages.forEach(P => isVisible(P) && renderPage(P.i)); };
+const isVisible = P => { const r = P.wrap.getBoundingClientRect(); return r.bottom > -600 && r.top < innerHeight + 600; };
+
+/* ---------- editing popover ---------- */
+let pop = null;
+function closePop() {
+  if (pop) { pop.remove(); pop = null; }
+  document.querySelectorAll('.tb.active').forEach(b => b.classList.remove('active'));
+  S.active = null;
+}
+document.addEventListener('mousedown', e => { if (pop && !pop.contains(e.target) && !e.target.classList.contains('tb')) closePop(); });
+
+function fontKindText(f) {
+  if (f.kind !== 'pdf') return '';
+  if (!f.embedded) return 'not embedded — any character works';
+  if (f.subset) return 'embedded subset';
+  return 'embedded';
+}
+
+function openPop(P, g, box) {
+  closePop();
+  S.active = { P, g };
+  box.classList.add('active');
+  const cur = S.doc.currentText(g.key);
+  const edited = S.doc.edits.has(g.key);
+  const fit = edited ? S.doc.edits.get(g.key).fit : false;
+  pop = document.createElement('div');
+  pop.className = 'pop';
+  pop.innerHTML = `
+    <div class="meta"><span>Font <b>${esc(g.mainFont.baseName)}</b></span><span>${(g.userSize).toFixed(1)} pt</span><span>${esc(fontKindText(g.mainFont))}</span></div>
+    <input type="text" class="txt" spellcheck="false" autocomplete="off">
+    ${edited ? `<div class="orig">Original: ${esc(showText(g.text))}</div>` : ''}
+    <div class="status"></div>
+    <div class="row">
+      <label class="check fitw" hidden><input type="checkbox" class="fitc"> Squeeze to keep the line length</label>
+      <span class="sp"></span>
+      ${edited ? '<button class="ghost small rev">Restore original</button>' : ''}
+      <button class="ghost small cancel">Cancel</button>
+      <button class="small apply">Apply</button>
+    </div>`;
+  P.wrap.appendChild(pop);
+  const inp = pop.querySelector('.txt');
+  inp.value = toEdit(cur);
+  pop.querySelector('.fitc').checked = fit;
+  // position
+  const bl = parseFloat(box.style.left), bt = parseFloat(box.style.top), bh = parseFloat(box.style.height);
+  const pw = P.wrap.clientWidth, ph = P.wrap.clientHeight;
+  const w = pop.offsetWidth;
+  let left = Math.min(Math.max(0, bl), Math.max(0, pw - w));
+  if (w > pw) left = (pw - w) / 2;
+  pop.style.left = left + 'px';
+  const below = bt + bh + 6;
+  pop.style.top = below + 'px';
+  if (below + pop.offsetHeight > ph && bt - pop.offsetHeight - 6 > 0) pop.style.top = (bt - pop.offsetHeight - 6) + 'px';
+  inp.focus();
+  inp.setSelectionRange(inp.value.length, inp.value.length);
+  const refresh = () => checkPop(g);
+  inp.addEventListener('input', debounce(refresh, 120));
+  pop.querySelector('.fitc').onchange = refresh;
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); applyPop(); }
+    if (e.key === 'Escape') { e.preventDefault(); closePop(); box.focus(); }
+  });
+  pop.querySelector('.cancel').onclick = () => closePop();
+  pop.querySelector('.apply').onclick = applyPop;
+  const rev = pop.querySelector('.rev');
+  if (rev) rev.onclick = () => { const k = g.key; closePop(); commit(() => S.doc.clearEdit(k)); };
+  refresh();
+  if (pop.getBoundingClientRect().bottom > innerHeight) pop.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+
+function checkPop(g) {
+  if (!pop) return;
+  const text = pop.querySelector('.txt').value;
+  const fit = pop.querySelector('.fitc').checked;
+  const pl = S.doc.plan(g, text, fit);
+  const st = pop.querySelector('.status');
+  const out = [];
+  if (pl.missing.length) {
+    const canLocal = 'queryLocalFonts' in window;
+    out.push(`<div class="st-err">No font available for <span class="chars">${esc(pl.missing.map(c => c.codePointAt(0) >= PUA ? '□' : c).join(' '))}</span>. These characters aren't in this PDF. Add a font that has them:
+      <div class="acts">${canLocal ? '<button class="small loc">Find fonts on this computer</button>' : ''}<button class="small ff">Load font file…</button></div></div>`);
+  }
+  const subs = S.doc.describePlan(pl);
+  for (const s of subs) {
+    const exact = s.tier === 2;
+    out.push(`<div class="${exact ? 'st-ok' : 'st-warn'}"><span class="chars">${esc(s.chars.join(' '))}</span> ${exact ? 'not in the PDF — taken from the same font on your computer:' : 'not in the PDF\'s fonts — drawn with'} <b>${esc(s.label)}</b>${exact ? '' : '.'}
+      ${!exact && s.tier >= 3 && 'queryLocalFonts' in window && !S.localList ? '<div class="acts"><button class="small loc">Use the exact font from this computer</button></div>' : ''}</div>`);
+  }
+  if (!pl.missing.length && !subs.length && pl.changed) out.push('<div class="st-ok">✓ Every character comes from the PDF\'s own font.</div>');
+  const em = pl.grow / (g.size || 1);
+  const fitLbl = pop.querySelector('.fitw');
+  fitLbl.hidden = !(em > 0.3 || fit);
+  if (em > 0.3 && !fit) out.push('<div class="st-info">The new text is longer, so the rest of this line moves right. Tick “Squeeze” if it would run into something.</div>');
+  st.innerHTML = out.join('');
+  st.querySelectorAll('.loc').forEach(b => b.onclick = () => findLocalFonts().then(() => checkPop(g)));
+  st.querySelectorAll('.ff').forEach(b => b.onclick = () => { S.afterFontLoad = () => checkPop(g); $('fontFile').click(); });
+  pop.querySelector('.apply').disabled = pl.missing.length > 0;
+}
+
+function applyPop() {
+  if (!S.active || !pop) return;
+  const { g } = S.active;
+  const text = pop.querySelector('.txt').value;
+  const fit = pop.querySelector('.fitc').checked;
+  const pl = S.doc.plan(g, text, fit);
+  if (pl.missing.length) return;
+  closePop();
+  const cur = S.doc.edits.get(g.key);
+  if (text === S.doc.currentText(g.key) && (!cur || cur.fit === fit) && !(text === g.text && !cur)) return;
+  if (text === g.text && !cur) return;
+  commit(() => S.doc.setEdit(g.key, text, fit));
+}
+
+/* ---------- applying changes and refreshing the preview ---------- */
+function commit(fn) {
+  S.busy = S.busy.then(async () => {
+    let conts;
+    try { conts = fn() || []; } catch (e) { console.error(e); status('<span style="color:var(--err)">Could not apply that change: ' + esc(e.message) + '</span>'); return; }
+    const pages = new Set();
+    for (const c of conts) for (const i of S.doc.pagesOfContainer(c)) pages.add(i);
+    await refreshPreview([...pages]);
+  });
+  return S.busy;
+}
+async function refreshPreview(pageIdx) {
+  pageIdx.forEach(i => S.pages[i] && S.pages[i].wrap.classList.add('updating'));
+  status('<span class="spin"></span> Updating preview…');
+  try {
+    const bytes = await S.doc.save();
+    const old = S.pjs;
+    S.pjs = await pdfjsLib.getDocument(Object.assign({ data: bytes }, PDFJS_OPTS)).promise;
+    for (const i of pageIdx) await renderPage(i, true);
+    if (old) old.destroy();
+    status('');
+  } catch (e) {
+    console.error(e);
+    status('<span style="color:var(--err)">Preview failed: ' + esc(e.message) + '</span>');
+  }
+  pageIdx.forEach(i => S.pages[i] && S.pages[i].wrap.classList.remove('updating'));
+  pageIdx.forEach(i => S.pages[i] && drawBoxes(S.pages[i]));
+  S.pages.forEach(markBoxes);
+  renderSide();
+  updateButtons();
+}
+function updateButtons() {
+  $('undoBtn').disabled = !S.doc || !S.doc.history.length;
+  $('dlBtn').disabled = !S.doc;
+  $('editCount').textContent = S.doc && S.doc.edits.size ? '(' + S.doc.edits.size + ')' : '';
+}
+$('undoBtn').onclick = () => { closePop(); commit(() => { const r = S.doc.undo(); return r ? r.conts : []; }); };
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && S.doc && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+    e.preventDefault(); $('undoBtn').click();
+  }
+});
+$('dlBtn').onclick = async () => {
+  $('dlBtn').disabled = true;
+  status('<span class="spin"></span> Preparing PDF…');
+  try {
+    await S.busy;
+    const bytes = await S.doc.save();
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = S.name + '_edited.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    status('Saved <b>' + esc(S.name) + '_edited.pdf</b>');
+  } catch (e) { status('<span style="color:var(--err)">Could not save: ' + esc(e.message) + '</span>'); }
+  $('dlBtn').disabled = false;
+};
+
+/* ---------- side panel ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tabp').forEach(p => p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'fonts') renderFonts();
+});
+
+function scrollToKey(key) {
+  for (const P of S.pages) {
+    const list = P.boxes.get(key);
+    if (list && list.length) { list[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); flash(list[0]); return; }
+  }
+}
+function flash(b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 1200); }
+
+function renderSide() {
+  const list = $('elist');
+  list.innerHTML = '';
+  const edits = [...S.doc.edits.entries()].map(([k, e]) => ({ k, e, g: S.doc.groups.get(k) }))
+    .sort((a, b) => a.g.pageIndex - b.g.pageIndex || a.g.runs[0].opIndex - b.g.runs[0].opIndex);
+  $('editsEmpty').hidden = edits.length > 0;
+  for (const { k, e, g } of edits) {
+    const d = document.createElement('div');
+    d.className = 'eitem';
+    d.innerHTML = `<div class="pg">Page ${g.pageIndex + 1}</div><del>${esc(showText(g.text))}</del><ins>${esc(showText(e.text))}</ins>
+      <div class="acts"><button class="ghost small show">Show</button><button class="ghost small rev">Restore original</button></div>`;
+    d.querySelector('.show').onclick = () => scrollToKey(k);
+    d.querySelector('.rev').onclick = () => commit(() => S.doc.clearEdit(k));
+    list.appendChild(d);
+  }
+  updateButtons();
+}
+
+/* ---------- find & replace ---------- */
+function findMatches() {
+  const f = $('findIn').value;
+  const out = [];
+  if (!f || !S.doc) return out;
+  const cs = $('caseIn').checked;
+  const re = new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), cs ? 'g' : 'gi');
+  const r = $('replIn').value;
+  for (const pg of S.doc.pages) for (const g of pg.groups) {
+    if (g.alias) continue;
+    const cur = S.doc.currentText(g.key);
+    re.lastIndex = 0;
+    if (!re.test(cur)) continue;
+    const nt = cur.replace(re, () => r);
+    out.push({ g, cur, nt });
+  }
+  return out;
+}
+function renderFind() {
+  const ms = findMatches();
+  S.hits = new Set(ms.map(m => m.g.key));
+  S.pages.forEach(markBoxes);
+  const box = $('matches');
+  box.innerHTML = '';
+  let bad = 0;
+  for (const m of ms.slice(0, 200)) {
+    const pl = S.doc.plan(m.g, m.nt, false);
+    m.missing = pl.missing;
+    const d = document.createElement('div');
+    if (pl.missing.length) { d.className = 'bad'; bad++; }
+    d.innerHTML = '<b>p.' + (m.g.pageIndex + 1) + '</b> ' + esc(showText(m.cur)) + (pl.missing.length ? '<br>No font for: ' + esc(pl.missing.join(' ')) : '');
+    d.onclick = () => scrollToKey(m.g.key);
+    box.appendChild(d);
+  }
+  $('findInfo').textContent = $('findIn').value ? (ms.length ? ms.length + ' line' + (ms.length > 1 ? 's' : '') + ' found' + (bad ? ' · ' + bad + ' need an extra font (Fonts tab)' : '') : 'Not found') : '';
+  $('replAll').disabled = !ms.length || ms.length === bad;
+  S.findCache = ms;
+}
+['findIn', 'replIn'].forEach(id => $(id).addEventListener('input', debounce(renderFind, 150)));
+$('caseIn').onchange = renderFind;
+$('replAll').onclick = () => {
+  const ms = (S.findCache || []).filter(m => !m.missing || !m.missing.length);
+  if (!ms.length) return;
+  commit(() => S.doc.setEdits(ms.map(m => ({ key: m.g.key, text: m.nt, fit: false })))).then(renderFind);
+};
+
+/* ---------- fonts ---------- */
+const normName = s => {
+  s = (s || '').toLowerCase().replace(/[^a-z0-9\u3000-\u9fff]/g, '');
+  s = s.replace(/(psmt|mt)$/, '').replace(/ps(?=(bold|italic|bolditalic|semibold)?$)/, '');
+  return s;
+};
+const CJK_NAMES = { '新細明體': 'pmingliu', '細明體': 'mingliu', '標楷體': 'dfkaishusbestdbf', '微軟正黑體': 'microsoftjhenghei', '微软雅黑': 'microsoftyahei', '微軟雅黑': 'microsoftyahei', '宋体': 'simsun', '新宋体': 'nsimsun', '黑体': 'simhei', '楷体': 'kaiti', '仿宋': 'fangsong', '細明體_hkscs': 'mingliuhkscs', '新細明體-extb': 'pmingliuextb' };
+function nameKeys(raw) {
+  const out = new Set();
+  let n = (raw || '').trim();
+  const style = /,(bold|italic|bolditalic)$/i.exec(n);
+  for (const [zh, ps] of Object.entries(CJK_NAMES)) if (n.toLowerCase().startsWith(zh)) n = ps + n.slice(zh.length);
+  out.add(normName(n));
+  if (style) out.add(normName(n.slice(0, style.index)) + style[1].toLowerCase());
+  return out;
+}
+function usedFonts() {
+  const set = new Set();
+  for (const pg of S.doc.pages) for (const g of pg.groups) for (const f of g.fonts) set.add(f);
+  return [...set];
+}
+function scoreMatch(pdfFont, names) {
+  const want = nameKeys(pdfFont.baseName);
+  let best = 0;
+  for (const n of names) {
+    const k = normName(n);
+    if (!k) continue;
+    for (const w of want) {
+      if (w === k) best = Math.max(best, 3);
+      else if (w.replace(/regular$/, '') === k.replace(/regular$/, '')) best = Math.max(best, 3);
+      else if (w.replace(/(bold|italic|bolditalic)$/, '') === k) best = Math.max(best, 1);
+    }
+  }
+  return best;
+}
+function matchTrueTypeToDoc(tf) {
+  const names = [tf.names.ps, tf.names.full, tf.names.family, tf.names.zhFull, tf.names.zhFamily];
+  let n = 0;
+  for (const f of usedFonts()) {
+    const s = scoreMatch(f, names);
+    if (s >= 3 || (s >= 1 && !f.local)) { f.local = tf; n++; }
+  }
+  return n;
+}
+// fonts changed: redo existing edits so they can use the better fonts
+function fontsChanged() {
+  if (!S.doc.edits.size) return;
+  commit(() => S.doc.rebuildAll());
+}
+async function findLocalFonts() {
+  if (!('queryLocalFonts' in window)) return;
+  try {
+    status('<span class="spin"></span> Looking for fonts…');
+    const list = await window.queryLocalFonts();
+    S.localList = list;
+    const fill = $('localPick');
+    const fams = new Map();
+    for (const fd of list) if (!fams.has(fd.fullName)) fams.set(fd.fullName, fd);
+    const sorted = [...fams.values()].sort((a, b) => (/[\u3000-\u9fff]|ming|kai|hei|song|sun|jheng|yahei|pingfang|heiti/i.test(b.fullName) - /[\u3000-\u9fff]|ming|kai|hei|song|sun|jheng|yahei|pingfang|heiti/i.test(a.fullName)) || a.fullName.localeCompare(b.fullName));
+    fill.innerHTML = '<option value="">Choose a font…</option>' + sorted.map((fd, i) => `<option value="${esc(fd.postscriptName)}">${esc(fd.fullName)}</option>`).join('');
+    $('localPickWrap').hidden = false;
+    let matched = 0;
+    for (const f of usedFonts()) {
+      let best = null, bs = 0;
+      for (const fd of list) {
+        const s = scoreMatch(f, [fd.postscriptName, fd.fullName, fd.family + (fd.style && !/regular/i.test(fd.style) ? fd.style : '')]);
+        if (s > bs) { bs = s; best = fd; }
+      }
+      if (best && bs >= 1) {
+        const tf = await loadLocalFont(best);
+        if (tf) { if (bs >= 3 || !f.local) f.local = tf; matched++; }
+      }
+    }
+    fontsChanged();
+    status(matched ? 'Found ' + matched + ' matching font' + (matched > 1 ? 's' : '') + ' on this computer.' : 'No exact matches on this computer. You can pick any installed font in the Fonts tab.');
+    renderFonts();
+  } catch (e) {
+    console.warn(e);
+    status('<span style="color:var(--err)">Font access was not allowed. You can load a font file instead (Fonts tab).</span>');
+  }
+}
+const localCache = new Map();
+async function loadLocalFont(fd) {
+  if (localCache.has(fd.postscriptName)) return localCache.get(fd.postscriptName);
+  try {
+    const blob = await fd.blob();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const n = Sfnt.count(bytes);
+    let idx = 0;
+    if (n > 1) for (let i = 0; i < n; i++) { try { if (Sfnt.open(bytes, i).names.ps === fd.postscriptName) { idx = i; break; } } catch (e) { } }
+    const tf = S.doc.addTrueType(bytes, idx);
+    tf.label = fd.fullName;
+    localCache.set(fd.postscriptName, tf);
+    return tf;
+  } catch (e) { console.warn('font load failed', fd.fullName, e); localCache.set(fd.postscriptName, null); return null; }
+}
+$('localBtn').hidden = !('queryLocalFonts' in window);
+$('localBtn').onclick = () => findLocalFonts();
+$('localPick').onchange = async () => {
+  const ps = $('localPick').value;
+  if (!ps || !S.localList) return;
+  const fd = S.localList.find(x => x.postscriptName === ps);
+  const tf = fd && await loadLocalFont(fd);
+  if (tf) { addExtra(tf); matchTrueTypeToDoc(tf); renderFonts(); fontsChanged(); if (S.active) checkPop(S.active.g); }
+  $('localPick').value = '';
+};
+$('fontFileBtn').onclick = () => { S.afterFontLoad = null; $('fontFile').click(); };
+$('fontFile').onchange = async () => {
+  const files = [...$('fontFile').files];
+  $('fontFile').value = '';
+  for (const file of files) {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const n = Sfnt.count(bytes);
+      for (let i = 0; i < Math.min(n, 12); i++) {
+        const tf = S.doc.addTrueType(bytes, i);
+        const m = matchTrueTypeToDoc(tf);
+        if (i === 0 || !m) addExtra(tf);
+      }
+      status('Loaded font <b>' + esc(file.name) + '</b>.');
+    } catch (e) { status('<span style="color:var(--err)">' + esc(file.name) + ': ' + esc(e.message) + '</span>'); }
+  }
+  renderFonts();
+  fontsChanged();
+  if (S.afterFontLoad) { S.afterFontLoad(); S.afterFontLoad = null; }
+  else if (S.active) checkPop(S.active.g);
+};
+function addExtra(tf) {
+  if (!S.extra.includes(tf)) S.extra.push(tf);
+  S.doc.addFallback(tf);
+}
+function renderFonts() {
+  if (!S.doc) return;
+  const fl = $('flist');
+  fl.innerHTML = '';
+  const used = usedFonts().sort((a, b) => a.baseName.localeCompare(b.baseName));
+  const seen = new Set();
+  for (const f of used) {
+    const k = f.baseName + '|' + fontKindText(f) + '|' + (f.local ? f.local.label : '');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const d = document.createElement('div');
+    d.className = 'fitem';
+    const kind = !f.embedded ? 'Not embedded — every character can be typed' : f.subset ? 'Embedded subset — only characters already used' : 'Embedded';
+    d.innerHTML = `<div class="nm">${esc(f.baseName)}${f.type3 ? ' <span class="ty">(Type 3)</span>' : ''}</div><div class="ty">${kind}</div>` +
+      (f.local ? `<div class="lc yes">✓ Same font on this computer: ${esc(f.local.label)}</div>` : (f.embedded && S.localList ? '<div class="lc no">Not found on this computer</div>' : ''));
+    fl.appendChild(d);
+  }
+  if (!used.length) fl.innerHTML = '<div class="empty">No editable text.</div>';
+  const xl = $('xlist');
+  xl.innerHTML = '';
+  for (const tf of S.extra) {
+    const d = document.createElement('div');
+    d.className = 'fitem';
+    d.innerHTML = `<div class="nm">${esc(tf.label)}</div><div class="ty">Used for characters no PDF font has${tf.isCJK ? ' (Chinese)' : ''}${tf.sfnt.isCFF ? ' · embedded whole (' + tf.sizeMB.toFixed(1) + ' MB)' : ''}</div>
+`;
+    xl.appendChild(d);
+  }
+}
+</script>
+</body>
+</html>
