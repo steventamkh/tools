@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Header & Footer Cropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #8250df; --accent-ink: #ffffff; --accent-soft: #f1ebfc;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --chip: #eef1f4;
+    --cut: rgba(198, 40, 40, .28); --cut-line: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #b392f0; --accent-ink: #1b1030; --accent-soft: #2a2240;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+      --cut: rgba(255, 90, 80, .35); --cut-line: #ff7a70;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #b392f0; --accent-ink: #1b1030; --accent-soft: #2a2240;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --chip: #252d37;
+    --cut: rgba(255, 90, 80, .35); --cut-line: #ff7a70;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  a.home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  a.home:hover { color: var(--accent); }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  .step {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 700; flex: none;
+  }
+  .card.disabled { opacity: .5; pointer-events: none; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop small { display: block; color: var(--muted); margin-top: 4px; }
+  #fileInfo { margin-top: 12px; font-size: .95rem; }
+  #fileInfo .name { font-weight: 600; word-break: break-all; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 20px; align-items: start; }
+  @media (max-width: 620px) { .layout { grid-template-columns: 1fr; } }
+
+  .pagenav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .pagenav span { font-size: .9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stage { position: relative; background: var(--chip); border-radius: 10px; padding: 12px; display: flex; justify-content: center; }
+  .sheet { position: relative; line-height: 0; box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 6px 18px rgba(0,0,0,.08); touch-action: none; user-select: none; }
+  .sheet canvas { display: block; max-width: 100%; }
+  .cut { position: absolute; left: 0; right: 0; background: var(--cut);
+         background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255,255,255,.18) 6px 12px); pointer-events: none; }
+  .cut.top { top: 0; } .cut.bottom { bottom: 0; }
+  .handle { position: absolute; left: -6px; right: -6px; height: 22px; margin-top: -11px; cursor: ns-resize; touch-action: none; }
+  .handle::before { content: ""; position: absolute; left: 0; right: 0; top: 10px; border-top: 2px dashed var(--cut-line); }
+  .handle::after {
+    content: "⇕"; position: absolute; right: 2px; top: 0; width: 22px; height: 22px; line-height: 22px; text-align: center;
+    background: var(--cut-line); color: #fff; border-radius: 50%; font-size: 13px;
+  }
+  .sheet.skip .cut, .sheet.skip .handle { display: none; }
+  .skipnote { font-size: .85rem; color: var(--muted); margin-top: 8px; text-align: center; min-height: 1.3em; }
+
+  label.f { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  .field { margin-bottom: 14px; }
+  .unit { display: flex; align-items: stretch; }
+  .unit input { border-radius: 10px 0 0 10px; }
+  .unit span {
+    display: grid; place-items: center; padding: 0 12px; border: 1px solid var(--line); border-left: 0;
+    border-radius: 0 10px 10px 0; background: var(--chip); color: var(--muted); font-size: .9rem;
+  }
+  input[type=number] {
+    width: 100%; font: inherit; font-size: 1.1rem; padding: 9px 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input:disabled { opacity: .5; }
+  .target { font-size: .82rem; background: var(--accent-soft); color: var(--accent); padding: 3px 9px; border-radius: 999px; display: inline-block; margin-bottom: 12px; font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: .9rem; margin: 10px 0; cursor: pointer; }
+  .check input { margin-top: 4px; accent-color: var(--accent); }
+  .check small { display: block; color: var(--muted); font-size: .8rem; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.small { padding: 6px 12px; font-size: .88rem; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .msg { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg:empty { display: none; }
+  #status { margin-top: 12px; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  .bar { height: 6px; background: var(--chip); border-radius: 999px; overflow: hidden; margin-top: 8px; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  footer { margin-top: 28px; font-size: .82rem; color: var(--muted); }
+  footer ol { padding-left: 18px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>Header &amp; Footer Cropper</h1>
+    <p>Trim a strip off the top and bottom of every page to remove headers, footers and page numbers.</p>
+    <div class="privacy">🔒 Runs in your browser. The PDF is never uploaded.</div>
+  </header>
+
+  <!-- Step 1 -->
+  <section class="card">
+    <h2><span class="step">1</span>Open a PDF</h2>
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <strong>Choose a PDF</strong> or drag it here
+      <small>Scanned or digital PDFs both work</small>
+    </div>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div id="fileInfo"></div>
+    <div class="msg" id="loadMsg"></div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="card disabled" id="setCard">
+    <h2><span class="step">2</span>Set how much to trim</h2>
+    <div class="layout">
+      <div>
+        <div class="pagenav">
+          <button class="secondary small" id="prev" aria-label="Previous page">‹ Prev</button>
+          <span id="pageLbl">Page – of –</span>
+          <button class="secondary small" id="next" aria-label="Next page">Next ›</button>
+        </div>
+        <div class="stage">
+          <div class="sheet" id="sheet">
+            <canvas id="cv" width="10" height="14"></canvas>
+            <div class="cut top" id="cutTop"></div>
+            <div class="cut bottom" id="cutBot"></div>
+            <div class="handle" id="hTop" aria-label="Drag to set top trim"></div>
+            <div class="handle" id="hBot" aria-label="Drag to set bottom trim"></div>
+          </div>
+        </div>
+        <div class="skipnote" id="skipNote"></div>
+      </div>
+      <div>
+        <div class="target" id="target">All pages</div>
+        <div class="field">
+          <label class="f" for="top">Trim from top</label>
+          <div class="unit"><input type="number" id="top" min="0" step="0.5" value="15"><span>mm</span></div>
+        </div>
+        <div class="field">
+          <label class="f" for="bot">Trim from bottom</label>
+          <div class="unit"><input type="number" id="bot" min="0" step="0.5" value="15"><span>mm</span></div>
+        </div>
+        <p class="hint">Drag the red dashed lines on the preview, or type values. Shaded areas will be removed.</p>
+        <label class="check"><input type="checkbox" id="skipFirst">
+          <span>Leave page 1 unchanged<small>e.g. a cover page</small></span></label>
+        <label class="check"><input type="checkbox" id="split">
+          <span>Different for odd &amp; even pages<small>Flip to an odd or even page to set each</small></span></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="card disabled" id="goCard">
+    <h2><span class="step">3</span>Download</h2>
+    <div class="actions">
+      <button id="go">Crop &amp; download PDF</button>
+    </div>
+    <div class="bar" id="bar"><div></div></div>
+    <div id="status"></div>
+    <div class="msg" id="outMsg"></div>
+  </section>
+
+  <footer>
+    <strong>Notes</strong>
+    <ol>
+      <li>Cropping hides the trimmed strip in every PDF viewer and when printing. Pages become slightly shorter; choose “Fit to page” when printing on A4.</li>
+      <li>In a digital PDF the trimmed text still exists inside the file, so this is not a way to redact confidential information.</li>
+      <li>Trim sizes are in millimetres of the real page, so they work for pages of any size.</li>
+    </ol>
+  </footer>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const PT_PER_MM = 72 / 25.4;
+const MIN_KEEP_MM = 10;
+const $ = id => document.getElementById(id);
+
+let fileBytes = null, fileName = '', pdfDoc = null, numPages = 0, cur = 0;
+let pageHmm = 297, renderToken = 0;
+const settings = { all: { top: 15, bottom: 15 }, odd: null, even: null };
+let split = false, skipFirst = false;
+
+/* ---------- which setting applies to page i (0-based) ---------- */
+function settingFor(i) {
+  if (skipFirst && i === 0) return null;
+  if (!split) return settings.all;
+  return (i % 2 === 0) ? settings.odd : settings.even;   // i=0 is page 1 (odd)
+}
+function targetLabel(i) {
+  if (skipFirst && i === 0) return 'Page 1: unchanged';
+  if (!split) return skipFirst ? 'All pages except page 1' : 'All pages';
+  return (i % 2 === 0) ? 'Odd pages' : 'Even pages';
+}
+
+/* ---------- loading ---------- */
+const drop = $('drop'), fileInput = $('file');
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+async function loadFile(f) {
+  setMsg('loadMsg', '', ''); setMsg('outMsg', '', ''); $('status').textContent = '';
+  $('fileInfo').textContent = 'Opening…';
+  try {
+    fileBytes = new Uint8Array(await f.arrayBuffer());
+    fileName = f.name.replace(/\.pdf$/i, '');
+    if (pdfDoc) pdfDoc.destroy();
+    pdfDoc = await pdfjsLib.getDocument({ data: fileBytes.slice() }).promise;
+    numPages = pdfDoc.numPages; cur = 0;
+    $('fileInfo').innerHTML = `<span class="name"></span> · ${numPages} page${numPages > 1 ? 's' : ''}`;
+    $('fileInfo').querySelector('.name').textContent = f.name;
+    $('setCard').classList.remove('disabled'); $('goCard').classList.remove('disabled');
+    await showPage();
+  } catch (err) {
+    console.error(err);
+    $('fileInfo').textContent = '';
+    setMsg('loadMsg', 'err', /password/i.test(err && err.message)
+      ? 'This PDF is password-protected. Remove the password first, then try again.'
+      : 'Could not open this file as a PDF.');
+    $('setCard').classList.add('disabled'); $('goCard').classList.add('disabled');
+  }
+}
+
+/* ---------- preview ---------- */
+async function showPage() {
+  const token = ++renderToken;
+  const page = await pdfDoc.getPage(cur + 1);
+  const base = page.getViewport({ scale: 1 });           // includes /Rotate, in points
+  pageHmm = base.height / PT_PER_MM;
+  const avail = Math.min($('sheet').parentElement.clientWidth - 24, 520);
+  const cssScale = avail / base.width;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const vp = page.getViewport({ scale: cssScale * dpr });
+  const cv = $('cv');
+  cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  cv.style.width = Math.round(base.width * cssScale) + 'px';
+  cv.style.height = Math.round(base.height * cssScale) + 'px';
+  await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+  if (token !== renderToken) return;
+  $('pageLbl').textContent = `Page ${cur + 1} of ${numPages}`;
+  $('prev').disabled = cur === 0; $('next').disabled = cur === numPages - 1;
+  syncUI();
+}
+
+function pxPerMm() { return $('cv').getBoundingClientRect().height / pageHmm; }
+
+function syncUI() {
+  const s = settingFor(cur);
+  $('target').textContent = targetLabel(cur);
+  $('sheet').classList.toggle('skip', !s);
+  $('top').disabled = $('bot').disabled = !s;
+  $('skipNote').textContent = s ? '' : 'This page will be left unchanged.';
+  if (!s) return;
+  if (document.activeElement !== $('top')) $('top').value = s.top;
+  if (document.activeElement !== $('bot')) $('bot').value = s.bottom;
+  drawOverlay();
+}
+
+function drawOverlay() {
+  const s = settingFor(cur); if (!s) return;
+  const k = pxPerMm(), H = $('cv').getBoundingClientRect().height;
+  const t = Math.min(s.top * k, H), b = Math.min(s.bottom * k, H);
+  $('cutTop').style.height = t + 'px';
+  $('cutBot').style.height = b + 'px';
+  $('hTop').style.top = t + 'px';
+  $('hBot').style.top = (H - b) + 'px';
+}
+
+function clampSetting(s, which) {
+  const max = Math.max(0, pageHmm - MIN_KEEP_MM);
+  s.top = Math.max(0, +s.top || 0); s.bottom = Math.max(0, +s.bottom || 0);
+  if (s.top + s.bottom > max) {
+    if (which === 'top') s.top = Math.max(0, max - s.bottom); else s.bottom = Math.max(0, max - s.top);
+  }
+}
+
+/* inputs */
+for (const [id, key] of [['top', 'top'], ['bot', 'bottom']]) {
+  $(id).addEventListener('input', () => {
+    const s = settingFor(cur); if (!s) return;
+    s[key] = parseFloat($(id).value) || 0;
+    clampSetting(s, key); drawOverlay();
+  });
+  $(id).addEventListener('change', () => syncUI());
+}
+
+/* dragging */
+function makeDraggable(el, key) {
+  el.addEventListener('pointerdown', e => {
+    const s = settingFor(cur); if (!s) return;
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    const move = ev => {
+      const r = $('cv').getBoundingClientRect();
+      const y = Math.min(Math.max(ev.clientY - r.top, 0), r.height);
+      const mm = (key === 'top' ? y : r.height - y) / pxPerMm();
+      s[key] = Math.round(mm * 2) / 2;
+      clampSetting(s, key); syncUI();
+    };
+    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  });
+}
+makeDraggable($('hTop'), 'top');
+makeDraggable($('hBot'), 'bottom');
+
+/* options */
+$('skipFirst').addEventListener('change', e => { skipFirst = e.target.checked; syncUI(); });
+$('split').addEventListener('change', e => {
+  split = e.target.checked;
+  if (split) { settings.odd = { ...settings.all }; settings.even = { ...settings.all }; }
+  else { settings.all = { ...(cur % 2 === 0 ? settings.odd : settings.even) }; }
+  syncUI();
+});
+$('prev').addEventListener('click', () => { if (cur > 0) { cur--; showPage(); } });
+$('next').addEventListener('click', () => { if (cur < numPages - 1) { cur++; showPage(); } });
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => pdfDoc && showPage(), 150); });
+
+/* ---------- crop & download ---------- */
+$('go').addEventListener('click', async () => {
+  setMsg('outMsg', '', '');
+  const btn = $('go'); btn.disabled = true;
+  const bar = $('bar'), fill = bar.firstElementChild;
+  bar.style.display = 'block'; fill.style.width = '0';
+  try {
+    $('status').textContent = 'Reading PDF…';
+    const doc = await PDFLib.PDFDocument.load(fileBytes, { updateMetadata: false });
+    const pages = doc.getPages();
+    let done = 0, skipped = 0;
+    for (let i = 0; i < pages.length; i++) {
+      const s = settingFor(i);
+      if (s && (s.top > 0 || s.bottom > 0)) {
+        if (cropPage(pages[i], s.top * PT_PER_MM, s.bottom * PT_PER_MM)) done++; else skipped++;
+      }
+      if (i % 10 === 0) {
+        fill.style.width = ((i + 1) / pages.length * 90) + '%';
+        $('status').textContent = `Cropping page ${i + 1} of ${pages.length}…`;
+        await new Promise(r => setTimeout(r));
+      }
+    }
+    $('status').textContent = 'Saving…';
+    const out = await doc.save();
+    fill.style.width = '100%';
+    const name = `${fileName}_cropped.pdf`;
+    const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    $('status').textContent = '';
+    setMsg('outMsg', 'ok', `Done. ${done} of ${pages.length} pages cropped → ${name}` +
+      (skipped ? ` (${skipped} page${skipped > 1 ? 's were' : ' was'} too small to crop and left unchanged)` : ''));
+  } catch (err) {
+    console.error(err);
+    $('status').textContent = '';
+    setMsg('outMsg', 'err', 'Something went wrong while cropping: ' + (err && err.message ? err.message : err));
+  } finally {
+    btn.disabled = false; setTimeout(() => { bar.style.display = 'none'; }, 800);
+  }
+});
+
+/* t, b in points, measured on the page as it appears (after /Rotate) */
+function cropPage(page, t, b) {
+  const c = page.getCropBox(), m = page.getMediaBox();
+  let x = Math.max(c.x, m.x), y = Math.max(c.y, m.y);
+  let w = Math.min(c.x + c.width, m.x + m.width) - x;
+  let h = Math.min(c.y + c.height, m.y + m.height) - y;
+  const rot = ((page.getRotation().angle % 360) + 360) % 360;
+  if (rot === 90)       { x += t; w -= t + b; }     // left edge shows at the top
+  else if (rot === 180) { y += t; h -= t + b; }
+  else if (rot === 270) { x += b; w -= t + b; }     // right edge shows at the top
+  else                  { y += b; h -= t + b; }
+  if (w < MIN_KEEP_MM * PT_PER_MM || h < MIN_KEEP_MM * PT_PER_MM) return false;
+  page.setMediaBox(x, y, w, h);
+  page.setCropBox(x, y, w, h);
+  page.setTrimBox(x, y, w, h);
+  page.setBleedBox(x, y, w, h);
+  page.setArtBox(x, y, w, h);
+  return true;
+}
+
+function setMsg(id, kind, text) { const el = $(id); el.className = 'msg' + (kind ? ' ' + kind : ''); el.textContent = text; }
+</script>
+</body>
+</html>
