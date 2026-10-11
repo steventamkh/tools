@@ -184,7 +184,13 @@
   <!-- Step 3 -->
   <section class="card disabled" id="goCard">
     <h2><span class="step">3</span>Download</h2>
-    <div class="actions">
+    <div class="sizeopts" role="radiogroup" aria-label="Output page size">
+      <label class="check"><input type="radio" name="size" value="keep" checked>
+        <span>Keep original page size (e.g. A4)<small>Trimmed content is centred on the page; header and footer areas are left blank. Ready to print.</small></span></label>
+      <label class="check"><input type="radio" name="size" value="crop">
+        <span>Shorter pages<small>Pages are cut down to the remaining area only.</small></span></label>
+    </div>
+    <div class="actions" style="margin-top:6px">
       <button id="go">Crop &amp; download PDF</button>
     </div>
     <div class="bar" id="bar"><div></div></div>
@@ -195,7 +201,8 @@
   <footer>
     <strong>Notes</strong>
     <ol>
-      <li>Cropping hides the trimmed strip in every PDF viewer and when printing. Pages become slightly shorter; choose “Fit to page” when printing on A4.</li>
+      <li>“Keep original page size” gives the same result as printing the shorter pages to PDF, but keeps text sharp and selectable. Clickable links on cropped pages are not kept in this mode.</li>
+      <li>With “Shorter pages”, choose “Fit to page” when printing on A4.</li>
       <li>In a digital PDF the trimmed text still exists inside the file, so this is not a way to redact confidential information.</li>
       <li>Trim sizes are in millimetres of the real page, so they work for pages of any size.</li>
     </ol>
@@ -364,22 +371,48 @@ $('go').addEventListener('click', async () => {
   bar.style.display = 'block'; fill.style.width = '0';
   try {
     $('status').textContent = 'Reading PDF…';
+    const keepSize = document.querySelector('input[name=size]:checked').value === 'keep';
     const doc = await PDFLib.PDFDocument.load(fileBytes, { updateMetadata: false });
     const pages = doc.getPages();
     let done = 0, skipped = 0;
-    for (let i = 0; i < pages.length; i++) {
+
+    // Work out the box to keep on each page (null = leave page as it is)
+    const boxes = pages.map((p, i) => {
       const s = settingFor(i);
-      if (s && (s.top > 0 || s.bottom > 0)) {
-        if (cropPage(pages[i], s.top * PT_PER_MM, s.bottom * PT_PER_MM)) done++; else skipped++;
-      }
-      if (i % 10 === 0) {
-        fill.style.width = ((i + 1) / pages.length * 90) + '%';
-        $('status').textContent = `Cropping page ${i + 1} of ${pages.length}…`;
-        await new Promise(r => setTimeout(r));
+      if (!s || (s.top <= 0 && s.bottom <= 0)) return null;
+      const box = keptBox(p, s.top * PT_PER_MM, s.bottom * PT_PER_MM);
+      if (box) done++; else skipped++;
+      return box;
+    });
+
+    let outDoc = doc;
+    if (!keepSize) {
+      boxes.forEach((bx, i) => { if (bx) setAllBoxes(pages[i], bx); });
+    } else {
+      // Build a new PDF: each trimmed page is placed, centred, on a page of its original size
+      outDoc = await PDFLib.PDFDocument.create();
+      const plainIdx = boxes.map((bx, i) => bx ? -1 : i).filter(i => i >= 0);
+      const copied = plainIdx.length ? await outDoc.copyPages(doc, plainIdx) : [];
+      const copiedAt = new Map(plainIdx.map((pi, k) => [pi, copied[k]]));
+      for (let i = 0; i < pages.length; i++) {
+        const bx = boxes[i];
+        if (!bx) { outDoc.addPage(copiedAt.get(i)); }
+        else {
+          const emb = await outDoc.embedPage(pages[i], {
+            left: bx.x, bottom: bx.y, right: bx.x + bx.w, top: bx.y + bx.h });
+          const np = outDoc.addPage([bx.base.w, bx.base.h]);
+          np.drawPage(emb, { x: (bx.base.w - bx.w) / 2, y: (bx.base.h - bx.h) / 2, width: bx.w, height: bx.h });
+          if (bx.rot) np.setRotation(PDFLib.degrees(bx.rot));
+        }
+        if (i % 10 === 0) {
+          fill.style.width = ((i + 1) / pages.length * 90) + '%';
+          $('status').textContent = `Processing page ${i + 1} of ${pages.length}…`;
+          await new Promise(r => setTimeout(r));
+        }
       }
     }
     $('status').textContent = 'Saving…';
-    const out = await doc.save();
+    const out = await outDoc.save();
     fill.style.width = '100%';
     const name = `${fileName}_cropped.pdf`;
     const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
@@ -399,23 +432,28 @@ $('go').addEventListener('click', async () => {
 });
 
 /* t, b in points, measured on the page as it appears (after /Rotate) */
-function cropPage(page, t, b) {
+/* returns the area to keep in the page's own (unrotated) coordinates, plus its original size */
+function keptBox(page, t, b) {
   const c = page.getCropBox(), m = page.getMediaBox();
   let x = Math.max(c.x, m.x), y = Math.max(c.y, m.y);
   let w = Math.min(c.x + c.width, m.x + m.width) - x;
   let h = Math.min(c.y + c.height, m.y + m.height) - y;
+  const base = { w, h };
   const rot = ((page.getRotation().angle % 360) + 360) % 360;
   if (rot === 90)       { x += t; w -= t + b; }     // left edge shows at the top
   else if (rot === 180) { y += t; h -= t + b; }
   else if (rot === 270) { x += b; w -= t + b; }     // right edge shows at the top
   else                  { y += b; h -= t + b; }
-  if (w < MIN_KEEP_MM * PT_PER_MM || h < MIN_KEEP_MM * PT_PER_MM) return false;
+  if (w < MIN_KEEP_MM * PT_PER_MM || h < MIN_KEEP_MM * PT_PER_MM) return null;
+  return { x, y, w, h, base, rot };
+}
+
+function setAllBoxes(page, { x, y, w, h }) {
   page.setMediaBox(x, y, w, h);
   page.setCropBox(x, y, w, h);
   page.setTrimBox(x, y, w, h);
   page.setBleedBox(x, y, w, h);
   page.setArtBox(x, y, w, h);
-  return true;
 }
 
 function setMsg(id, kind, text) { const el = $(id); el.className = 'msg' + (kind ? ' ' + kind : ''); el.textContent = text; }
