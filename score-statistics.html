@@ -11,21 +11,21 @@
     --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
     --accent: #1f6feb; --accent-ink: #ffffff; --accent-soft: #e7f0fd;
     --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --warn: #9a6700; --warn-soft: #fff4d6;
-    --chip: #eef1f4; --bar: #1f6feb; --bar-fail: #e5534b; --abs: #8a96a3;
+    --chip: #eef1f4; --grid: #e1e5ea; --bar: #1f6feb; --bar-fail: #e5534b; --abs: #8a96a3;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
       --accent: #6ea8fe; --accent-ink: #0b1a33; --accent-soft: #1a2a42;
       --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
-      --chip: #252d37; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
+      --chip: #252d37; --grid: #2e3742; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
     }
   }
   :root[data-theme="dark"] {
     --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
     --accent: #6ea8fe; --accent-ink: #0b1a33; --accent-soft: #1a2a42;
     --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
-    --chip: #252d37; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
+    --chip: #252d37; --grid: #2e3742; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
   }
   * { box-sizing: border-box; }
   body {
@@ -90,25 +90,31 @@
   @media (max-width: 560px) { .levels { grid-template-columns: repeat(3, 1fr); } }
 
   /* paste box */
-  .pbox { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+  .pbox { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  textarea.paste::placeholder { color: var(--muted); opacity: .8; }
   .pbox .ghead { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel); align-items: center; }
   .pbox .ghead input { font-weight: 600; padding: 5px 8px; font-size: .95rem; }
   .pbox .ghead .cnt { font-size: .78rem; color: var(--muted); white-space: nowrap; }
   .grid3 { display: grid; grid-template-columns: 36px 1fr auto; height: 380px; position: relative; }
   .grid3.short { height: 300px; }
-  .gutter, .status {
-    overflow: hidden; padding: 8px 0; font-size: .85rem; line-height: 24px; font-variant-numeric: tabular-nums;
+  .grid3 > .gutter, .grid3 > .status, .grid3 > textarea {
+    background-image: repeating-linear-gradient(to bottom, transparent 0 23px, var(--grid) 23px 24px);
+    background-attachment: local;
   }
-  .gutter { text-align: right; padding-right: 8px; color: var(--muted); background: var(--chip); user-select: none; }
-  .status { padding-right: 8px; padding-left: 6px; min-width: 76px; text-align: right; user-select: none; border-left: 1px solid var(--line); }
+  .gutter, .status {
+    overflow: hidden; padding: 0; font-size: .85rem; line-height: 24px; font-variant-numeric: tabular-nums;
+  }
+  .gutter { text-align: right; padding-right: 8px; color: var(--muted); background-color: var(--chip); user-select: none; border-right: 1px solid var(--grid); }
+  .gutter div.blank { opacity: .55; }
+  .status { padding-right: 8px; padding-left: 6px; min-width: 76px; text-align: right; user-select: none; border-left: 1px solid var(--line); background-color: var(--chip); }
   .status div, .gutter div { height: 24px; white-space: nowrap; }
   .status .fail { color: var(--err); font-weight: 600; }
   .status .abs { color: var(--abs); }
   .status .bad { color: var(--warn); font-weight: 600; }
-  .status .lv { display: inline-block; min-width: 24px; margin-left: 4px; font-size: .74rem; color: var(--muted); text-align: left; }
+  .status .lv { display: inline-block; min-width: 30px; margin-left: 4px; font-size: .74rem; color: var(--muted); text-align: left; }
   textarea.paste {
-    width: 100%; height: 100%; resize: none; border: 0; margin: 0; padding: 8px 8px;
-    font: inherit; font-size: .92rem; line-height: 24px; background: transparent; color: var(--ink);
+    width: 100%; height: 100%; resize: none; border: 0; margin: 0; padding: 0 8px;
+    font: inherit; font-size: .92rem; line-height: 24px; background-color: var(--panel); color: var(--ink);
     white-space: pre; overflow: auto; tab-size: 3; font-variant-numeric: tabular-nums;
   }
   textarea.paste:focus { outline: none; }
@@ -236,6 +242,7 @@ const LEVELS = [
 ];
 const BIN_LABELS = ['0–10','11–20','21–30','31–40','41–50','51–60','61–70','71–80','81–90','91–100'];
 const DEFAULT_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
+const MIN_ROWS = 45;
 const STORE_KEY = 'scoreStats.v1';
 const ABS_RE = /^(abs|absent|a|缺|缺考|缺席|請假|病假|-|－|—|–|\/|n\/?a|x|nil)$/i;
 
@@ -359,7 +366,7 @@ function withPctPlain(v) {
   return isFull100() ? f2(v) : `${f2(v)} (${f2(pctOf(v))}%)`;
 }
 const levelRows = () => LEVELS.map(l => l.k);
-const lvLabel = k => k === '<1' ? '1級以下' : k + ' 級';
+const lvLabel = k => k === '<1' ? 'L1 以下' : 'L' + k;
 
 /* ---------- paste box ---------- */
 function makeBox(container, opts) {
@@ -371,9 +378,8 @@ function makeBox(container, opts) {
       </div>
       <div class="grid3 ${opts.short ? 'short' : ''}">
         <div class="gutter"></div>
-        <textarea class="paste" wrap="off" spellcheck="false" aria-label="分數"></textarea>
+        <textarea class="paste" wrap="off" spellcheck="false" aria-label="分數" placeholder="在此貼上分數"></textarea>
         <div class="status"></div>
-        <div class="empty-hint">在這裏貼上分數<br>（Ctrl+V／⌘V）</div>
       </div>
     </div>
     <div class="pfoot noprint">
@@ -390,7 +396,7 @@ function makeBox(container, opts) {
   ta.addEventListener('input', () => { opts.setText(ta.value); clearTimeout(t); t = setTimeout(changed, 120); });
   nameIn.addEventListener('input', () => opts.onName(nameIn.value));
   container.querySelector('.clr').addEventListener('click', () => { ta.value = ''; opts.onText(''); ta.focus(); });
-  return { ta, gut, st, cnt: container.querySelector('.cnt'), msg: container.querySelector('.pmsg'), hint: container.querySelector('.empty-hint') };
+  return { ta, gut, st, cnt: container.querySelector('.cnt'), msg: container.querySelector('.pmsg') };
 }
 function paintBox(box, parsed, stats) {
   const { rows, header } = parsed;
@@ -403,15 +409,16 @@ function paintBox(box, parsed, stats) {
     if (r.status === 'ok') {
       const p = pctOf(r.raw);
       const fail = p < Number(state.pass) - 1e-9;
-      const lv = state.showLv ? `<span class="lv">${esc(levelOf(p) === '<1' ? '—' : levelOf(p))}</span>` : '';
+      const lv = state.showLv ? `<span class="lv">${esc(levelOf(p) === '<1' ? '—' : 'L' + levelOf(p))}</span>` : '';
       s += `<div class="${fail ? 'fail' : ''}">${fScore(r.raw)}${lv}</div>`;
     } else if (r.status === 'abs') s += `<div class="abs">缺考</div>`;
     else s += `<div class="bad" title="${esc(r.why)}">⚠ ${esc(r.why)}</div>`;
   });
-  g += '<div></div>'.repeat(3); s += '<div></div>'.repeat(3);
+  const used = rows.length + (header ? 1 : 0);
+  const total = Math.max(MIN_ROWS, used + 3);
+  for (let i = used; i < total; i++) { g += `<div class="blank">${i - (header ? 1 : 0) + 1}</div>`; s += '<div></div>'; }
   box.gut.innerHTML = g; box.st.innerHTML = s;
   box.gut.scrollTop = box.ta.scrollTop; box.st.scrollTop = box.ta.scrollTop;
-  box.hint.style.display = box.ta.value.trim() ? 'none' : '';
   box.cnt.textContent = rows.length ? `${stats.n} / ${rows.length} 人` : '';
   const notes = [];
   if (header) notes.push('已略過第一行標題');
@@ -424,7 +431,7 @@ function paintBox(box, parsed, stats) {
 function buildSettings() {
   const lv = document.getElementById('levels');
   lv.innerHTML = LEVELS.map(l => `
-    <div><label for="cut_${l.k}">${l.k} 級 ≥</label>
+    <div><label for="cut_${l.k}">L${l.k} ≥</label>
     <input type="number" id="cut_${l.k}" data-k="${l.k}" min="0" max="100" step="any" value="${esc(state.cut[l.k])}"></div>`).join('');
   lv.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
     state.cut[inp.dataset.k] = inp.value === '' ? '' : Number(inp.value); changed();
@@ -441,7 +448,7 @@ function checkLevels() {
   const vals = LEVELS.map(l => Number(state.cut[l.k]));
   let bad = '';
   if (vals.some(v => !Number.isFinite(v))) bad = '請填寫所有等級分界。';
-  else for (let i = 0; i < vals.length - 1; i++) if (vals[i] <= vals[i + 1]) { bad = `${LEVELS[i].k} 級的分界應高於 ${LEVELS[i + 1].k} 級。`; break; }
+  else for (let i = 0; i < vals.length - 1; i++) if (vals[i] <= vals[i + 1]) { bad = `L${LEVELS[i].k} 的分界應高於 L${LEVELS[i + 1].k}。`; break; }
   msg.textContent = state.showLv ? bad : '';
 }
 
@@ -502,6 +509,10 @@ function lvTable(stats) {
       <td class="barcell"><div class="bar" style="width:${stats.levels[k] / max * 100}%"></div></td></tr>`).join('')}
     </tbody></table></div>`;
 }
+function stuNo(no) {
+  const cls = state.single.name.trim();
+  return cls ? cls + String(no).padStart(2, '0') : String(no);
+}
 function renderClass() {
   const parsed = parse(state.single.text);
   const s = compute(parsed.rows);
@@ -529,7 +540,7 @@ function renderClass() {
       ${state.showLv ? `<div><h3>等級分布</h3>${lvTable(s)}</div>` : ''}
     </div>
     <h3>不合格學生（學號）</h3>
-    <div class="failnums">${failList.length ? failList.map(x => `<span title="${esc(x.r.name)}">${x.no}${x.r.name ? ' ' + esc(x.r.name) : ''}・${fScore(x.r.raw)}</span>`).join('') : '<span class="muted" style="background:none;color:var(--muted)">沒有</span>'}</div>
+    <div class="failnums">${failList.length ? failList.map(x => `<span title="${esc(x.r.name)}">${esc(stuNo(x.no))}${x.r.name ? ' ' + esc(x.r.name) : ''}・${fScore(x.r.raw)}</span>`).join('') : '<span class="muted" style="background:none;color:var(--muted)">沒有</span>'}</div>
   `;
   // export data
   const name = state.single.name.trim() || '班別／組別';
