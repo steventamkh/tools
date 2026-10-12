@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成績統計</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #1f6feb; --accent-ink: #ffffff; --accent-soft: #e7f0fd;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --warn: #9a6700; --warn-soft: #fff4d6;
+    --chip: #eef1f4; --bar: #1f6feb; --bar-fail: #e5534b; --abs: #8a96a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #6ea8fe; --accent-ink: #0b1a33; --accent-soft: #1a2a42;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+      --chip: #252d37; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #6ea8fe; --accent-ink: #0b1a33; --accent-soft: #1a2a42;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+    --chip: #252d37; --bar: #6ea8fe; --bar-fail: #ff7a70; --abs: #7d8996;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang HK", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+  .home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy {
+    display: inline-flex; gap: 6px; align-items: center; margin-top: 12px;
+    font-size: .85rem; color: var(--ok); background: var(--ok-soft); padding: 4px 10px; border-radius: 999px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; min-width: 0; }
+  .card h2 { font-size: 1rem; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card h3 { font-size: .92rem; margin: 22px 0 10px; color: var(--muted); font-weight: 600; }
+  .step {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 700; flex: none;
+  }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input[type=text], input[type=number] {
+    width: 100%; font: inherit; font-size: 1rem; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input[type=number] { font-variant-numeric: tabular-nums; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: .9rem; }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); }
+  .msg:empty { display: none; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.ghost { background: var(--chip); color: var(--ink); font-weight: 500; }
+  button.small { padding: 5px 10px; font-size: .82rem; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+  .seg button { background: transparent; color: var(--muted); padding: 7px 16px; border-radius: 8px; font-weight: 600; }
+  .seg button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .seg.big button { padding: 10px 22px; font-size: 1rem; }
+
+  /* settings */
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
+  .levels { display: grid; grid-template-columns: repeat(6, minmax(70px, 1fr)); gap: 10px; margin-top: 8px; }
+  .levels label { text-align: center; }
+  .levels input { text-align: center; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: .92rem; cursor: pointer; color: var(--ink); margin: 0; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .lvwrap.off { opacity: .45; pointer-events: none; }
+
+  /* layout */
+  .classLayout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  .classLayout > .card { margin-top: 20px; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  @media (max-width: 860px) { .classLayout { grid-template-columns: 1fr; } .classLayout > .card + .card { margin-top: 0; } }
+  @media (max-width: 560px) { .levels { grid-template-columns: repeat(3, 1fr); } }
+
+  /* paste box */
+  .pbox { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+  .pbox .ghead { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel); align-items: center; }
+  .pbox .ghead input { font-weight: 600; padding: 5px 8px; font-size: .95rem; }
+  .pbox .ghead .cnt { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+  .grid3 { display: grid; grid-template-columns: 36px 1fr auto; height: 380px; position: relative; }
+  .grid3.short { height: 300px; }
+  .gutter, .status {
+    overflow: hidden; padding: 8px 0; font-size: .85rem; line-height: 24px; font-variant-numeric: tabular-nums;
+  }
+  .gutter { text-align: right; padding-right: 8px; color: var(--muted); background: var(--chip); user-select: none; }
+  .status { padding-right: 8px; padding-left: 6px; min-width: 76px; text-align: right; user-select: none; border-left: 1px solid var(--line); }
+  .status div, .gutter div { height: 24px; white-space: nowrap; }
+  .status .fail { color: var(--err); font-weight: 600; }
+  .status .abs { color: var(--abs); }
+  .status .bad { color: var(--warn); font-weight: 600; }
+  .status .lv { display: inline-block; min-width: 24px; margin-left: 4px; font-size: .74rem; color: var(--muted); text-align: left; }
+  textarea.paste {
+    width: 100%; height: 100%; resize: none; border: 0; margin: 0; padding: 8px 8px;
+    font: inherit; font-size: .92rem; line-height: 24px; background: transparent; color: var(--ink);
+    white-space: pre; overflow: auto; tab-size: 3; font-variant-numeric: tabular-nums;
+  }
+  textarea.paste:focus { outline: none; }
+  .pbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .empty-hint {
+    position: absolute; left: 44px; right: 84px; top: 40px; text-align: center; font-size: .85rem; color: var(--muted);
+    pointer-events: none;
+  }
+  .pfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* results */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+  .tile { background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+  .tile .k { font-size: .8rem; color: var(--muted); }
+  .tile .v { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .tile .s { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tile.hl .v { color: var(--accent); }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: .92rem; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { font-size: .8rem; color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--line); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.grade, th.grade { font-weight: 700; background: var(--accent-soft); }
+  .barcell { width: 46%; min-width: 120px; }
+  .bar { height: 14px; border-radius: 4px; background: var(--bar); min-width: 0; }
+  .bar.fail { background: var(--bar-fail); }
+  .heat { position: relative; }
+  .muted { color: var(--muted); }
+  .failnums { font-size: .9rem; line-height: 1.8; }
+  .failnums span { display: inline-block; background: var(--err-soft); color: var(--err); border-radius: 6px; padding: 0 7px; margin: 0 4px 4px 0; font-variant-numeric: tabular-nums; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--panel);
+    padding: 9px 16px; border-radius: 10px; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+
+  @media print {
+    body { background: #fff; color: #000; }
+    .home, .privacy, .noprint, #settingsCard, .inputArea, .classLayout > .card:first-child { display: none !important; }
+    .classLayout { display: block; }
+    .card { border: 0; padding: 0; }
+    .wrap { max-width: none; padding: 0; }
+    .tile { border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>成績統計</h1>
+    <p>貼上分數，即時計算平均分、標準差、合格率、分數分布及等級分布。可統計一班／一組，或全級各班。</p>
+    <div class="privacy">🔒 所有計算在你的瀏覽器內完成，分數不會上傳</div>
+  </header>
+
+  <div class="card noprint">
+    <h2><span class="step">1</span>統計範圍</h2>
+    <div class="seg big" id="modeSeg">
+      <button data-mode="class" class="on">班別／組別</button>
+      <button data-mode="grade">全級</button>
+    </div>
+  </div>
+
+  <div class="card" id="settingsCard">
+    <h2><span class="step">2</span>設定 <span class="hint" style="margin:0;font-weight:400">（會記住，下次打開自動帶回）</span></h2>
+    <div class="settings">
+      <div>
+        <label for="full">滿分</label>
+        <input type="number" id="full" min="1" step="any" value="100">
+      </div>
+      <div>
+        <label for="pass">合格分（佔滿分 %）</label>
+        <input type="number" id="pass" min="0" max="100" step="any" value="50">
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:8px">
+        <label class="switch"><input type="checkbox" id="showLv" checked> 顯示等級（高中）</label>
+      </div>
+    </div>
+    <div class="lvwrap" id="lvWrap" style="margin-top:16px">
+      <label>等級分界：達到以下百分比或以上（佔滿分 %）</label>
+      <div class="levels" id="levels"></div>
+      <div class="hint" id="lvHint">滿分不是 100 時，分數會先換算成百分比，再計分數分布、合格及等級。</div>
+      <div class="msg warn" id="lvMsg"></div>
+    </div>
+  </div>
+
+  <!-- class mode -->
+  <div id="classMode" class="classLayout">
+    <div class="card inputArea">
+      <h2><span class="step">3</span>按學號貼上分數</h2>
+      <div id="singleBox"></div>
+      <div class="hint">從 Excel／Google Sheet 複製一欄分數貼上即可，左邊數字是學號。亦可複製兩欄（姓名＋分數）。空白、ABS、缺考、「-」當作缺考，不計入統計。</div>
+    </div>
+    <div class="card" id="classResults"></div>
+  </div>
+
+  <!-- grade mode -->
+  <div id="gradeMode" class="hidden">
+    <div class="card inputArea">
+      <h2><span class="step">3</span>按班別／組別貼上分數
+        <span class="spacer"></span>
+        <span class="toolbar noprint">
+          <button class="ghost small" id="minusG">－ 減一欄</button>
+          <button class="ghost small" id="plusG">＋ 加一欄</button>
+        </span>
+      </h2>
+      <div class="groups" id="groups"></div>
+      <div class="hint">每欄貼上一班或一組的全部分數（按學號次序）。欄名可以修改，例如 4A、4B 或 組1。最多 6 欄。</div>
+    </div>
+    <div class="card" id="gradeResults"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const LEVELS = [
+  { k: '5*', def: 85 }, { k: '5', def: 75 }, { k: '4', def: 60 },
+  { k: '3', def: 45 }, { k: '2', def: 35 }, { k: '1', def: 0 }
+];
+const BIN_LABELS = ['0–10','11–20','21–30','31–40','41–50','51–60','61–70','71–80','81–90','91–100'];
+const DEFAULT_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
+const STORE_KEY = 'scoreStats.v1';
+const ABS_RE = /^(abs|absent|a|缺|缺考|缺席|請假|病假|-|－|—|–|\/|n\/?a|x|nil)$/i;
+
+let state = {
+  mode: 'class', full: 100, pass: 50, showLv: true,
+  cut: Object.fromEntries(LEVELS.map(l => [l.k, l.def])),
+  view: 'count',
+  single: { name: '', text: '' },
+  groups: DEFAULT_NAMES.slice(0, 4).map(n => ({ name: n, text: '' }))
+};
+
+/* ---------- storage ---------- */
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (s && typeof s === 'object') {
+      state = Object.assign(state, s);
+      state.cut = Object.assign(Object.fromEntries(LEVELS.map(l => [l.k, l.def])), s.cut || {});
+      if (!Array.isArray(state.groups) || state.groups.length < 1) state.groups = DEFAULT_NAMES.slice(0, 4).map(n => ({ name: n, text: '' }));
+    }
+  } catch (e) {}
+}
+let saveTimer;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }, 300);
+}
+
+/* ---------- parsing ---------- */
+function toNum(s) {
+  if (s == null) return null;
+  let t = String(s).trim().replace(/[,\s]/g, '').replace(/[％%]$/, '');
+  t = t.replace(/[０-９．]/g, c => c === '．' ? '.' : String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : null;
+}
+function parse(text) {
+  let lines = String(text || '').replace(/\r/g, '').split('\n');
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  const rows = lines.map(line => {
+    const cells = line.split('\t').map(c => c.trim());
+    const filled = cells.filter(c => c !== '');
+    if (!filled.length) return { status: 'abs', name: '' };
+    const noDigit = !/[0-9０-９]/.test(line) && !filled.some(c => ABS_RE.test(c));
+    const headerish = noDigit && /(分數|總分|成績|得分|姓名|學號|班號|score|mark|total|name|class)/i.test(line);
+    let score = null, idx = -1;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const v = toNum(cells[i]);
+      if (v !== null) { score = v; idx = i; break; }
+      if (cells[i] !== '' ) {
+        if (ABS_RE.test(cells[i])) { idx = i; break; }
+        if (cells.length === 1) break;
+      }
+    }
+    const names = cells.filter((c, i) => i !== idx && c !== '' && toNum(c) === null && !ABS_RE.test(c));
+    const name = names.join(' ');
+    if (score === null) {
+      const isAbs = filled.some(c => ABS_RE.test(c)) || (cells.length > 1 && cells[cells.length - 1] === '');
+      return isAbs ? { status: 'abs', name, headerish } : { status: 'err', name, why: '不是分數', noDigit };
+    }
+    if (score < 0) return { status: 'err', name, raw: score, why: '負數' };
+    if (score > state.full + 1e-9) return { status: 'err', name, raw: score, why: '超過滿分' };
+    return { status: 'ok', name, raw: score };
+  });
+  // skip a header line (e.g. "分數" / "姓名  分數") at the top
+  let header = false;
+  if (rows.length && ((rows[0].status === 'err' && rows[0].noDigit) || rows[0].headerish)) { rows.shift(); header = true; }
+  return { rows, header };
+}
+
+/* ---------- maths ---------- */
+const pctOf = raw => raw / state.full * 100;
+function binOf(p) {
+  if (p <= 10) return 0;
+  return Math.min(9, Math.ceil(p / 10 - 1e-9) - 1);
+}
+function levelOf(p) {
+  for (const l of LEVELS) {
+    const c = Number(state.cut[l.k]);
+    if (Number.isFinite(c) && p >= c - 1e-9) return l.k;
+  }
+  return '<1';
+}
+function compute(rows) {
+  const vals = rows.filter(r => r.status === 'ok').map(r => r.raw);
+  const n = vals.length;
+  const out = {
+    total: rows.length, n, absent: rows.filter(r => r.status === 'abs').length,
+    errors: rows.filter(r => r.status === 'err').length,
+    bins: new Array(10).fill(0), levels: Object.fromEntries([...LEVELS.map(l => [l.k, 0]), ['<1', 0]]),
+    vals
+  };
+  if (!n) return out;
+  const mean = vals.reduce((a, b) => a + b, 0) / n;
+  const varP = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+  const sorted = [...vals].sort((a, b) => a - b);
+  out.mean = mean;
+  out.sd = Math.sqrt(varP);
+  out.median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+  out.max = sorted[n - 1];
+  out.min = sorted[0];
+  out.passN = vals.filter(v => pctOf(v) >= Number(state.pass) - 1e-9).length;
+  out.passRate = out.passN / n;
+  vals.forEach(v => { const p = pctOf(v); out.bins[binOf(p)]++; out.levels[levelOf(p)]++; });
+  return out;
+}
+
+/* ---------- formatting ---------- */
+const f2 = v => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2);
+const fScore = v => v == null ? '—' : String(Math.round(v * 100) / 100);
+const fPct = (a, b) => b ? (Math.round(a / b * 1000) / 10).toFixed(1) + '%' : '—';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isFull100 = () => Number(state.full) === 100;
+function withPct(v) {
+  if (v == null) return '—';
+  return isFull100() ? f2(v) : `${f2(v)} <span class="muted">(${f2(pctOf(v))}%)</span>`;
+}
+function withPctPlain(v) {
+  if (v == null) return '—';
+  return isFull100() ? f2(v) : `${f2(v)} (${f2(pctOf(v))}%)`;
+}
+const levelRows = () => LEVELS.map(l => l.k);
+const lvLabel = k => k === '<1' ? '1級以下' : k + ' 級';
+
+/* ---------- paste box ---------- */
+function makeBox(container, opts) {
+  container.innerHTML = `
+    <div class="pbox">
+      <div class="ghead">
+        <input type="text" class="gname" placeholder="${opts.placeholder}" value="${esc(opts.name || '')}" aria-label="名稱">
+        <span class="cnt"></span>
+      </div>
+      <div class="grid3 ${opts.short ? 'short' : ''}">
+        <div class="gutter"></div>
+        <textarea class="paste" wrap="off" spellcheck="false" aria-label="分數"></textarea>
+        <div class="status"></div>
+        <div class="empty-hint">在這裏貼上分數<br>（Ctrl+V／⌘V）</div>
+      </div>
+    </div>
+    <div class="pfoot noprint">
+      <span class="hint pmsg" style="margin:0"></span>
+      <button class="ghost small clr">清除</button>
+    </div>`;
+  const ta = container.querySelector('textarea');
+  const gut = container.querySelector('.gutter');
+  const st = container.querySelector('.status');
+  const nameIn = container.querySelector('.gname');
+  ta.value = opts.text || '';
+  ta.addEventListener('scroll', () => { gut.scrollTop = ta.scrollTop; st.scrollTop = ta.scrollTop; });
+  let t;
+  ta.addEventListener('input', () => { opts.setText(ta.value); clearTimeout(t); t = setTimeout(changed, 120); });
+  nameIn.addEventListener('input', () => opts.onName(nameIn.value));
+  container.querySelector('.clr').addEventListener('click', () => { ta.value = ''; opts.onText(''); ta.focus(); });
+  return { ta, gut, st, cnt: container.querySelector('.cnt'), msg: container.querySelector('.pmsg'), hint: container.querySelector('.empty-hint') };
+}
+function paintBox(box, parsed, stats) {
+  const { rows, header } = parsed;
+  // the textarea may contain a header line we skipped: keep the gutter aligned
+  const offset = header ? 1 : 0;
+  let g = '', s = '';
+  if (header) { g += '<div>—</div>'; s += '<div class="abs">標題</div>'; }
+  rows.forEach((r, i) => {
+    g += `<div>${i + 1}</div>`;
+    if (r.status === 'ok') {
+      const p = pctOf(r.raw);
+      const fail = p < Number(state.pass) - 1e-9;
+      const lv = state.showLv ? `<span class="lv">${esc(levelOf(p) === '<1' ? '—' : levelOf(p))}</span>` : '';
+      s += `<div class="${fail ? 'fail' : ''}">${fScore(r.raw)}${lv}</div>`;
+    } else if (r.status === 'abs') s += `<div class="abs">缺考</div>`;
+    else s += `<div class="bad" title="${esc(r.why)}">⚠ ${esc(r.why)}</div>`;
+  });
+  g += '<div></div>'.repeat(3); s += '<div></div>'.repeat(3);
+  box.gut.innerHTML = g; box.st.innerHTML = s;
+  box.gut.scrollTop = box.ta.scrollTop; box.st.scrollTop = box.ta.scrollTop;
+  box.hint.style.display = box.ta.value.trim() ? 'none' : '';
+  box.cnt.textContent = rows.length ? `${stats.n} / ${rows.length} 人` : '';
+  const notes = [];
+  if (header) notes.push('已略過第一行標題');
+  if (stats.errors) notes.push(`⚠ ${stats.errors} 行無法讀取，未計入統計`);
+  box.msg.textContent = notes.join('；');
+  box.msg.style.color = stats.errors ? 'var(--warn)' : '';
+}
+
+/* ---------- settings UI ---------- */
+function buildSettings() {
+  const lv = document.getElementById('levels');
+  lv.innerHTML = LEVELS.map(l => `
+    <div><label for="cut_${l.k}">${l.k} 級 ≥</label>
+    <input type="number" id="cut_${l.k}" data-k="${l.k}" min="0" max="100" step="any" value="${esc(state.cut[l.k])}"></div>`).join('');
+  lv.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+    state.cut[inp.dataset.k] = inp.value === '' ? '' : Number(inp.value); changed();
+  }));
+  const full = document.getElementById('full'), pass = document.getElementById('pass'), showLv = document.getElementById('showLv');
+  full.value = state.full; pass.value = state.pass; showLv.checked = state.showLv;
+  full.addEventListener('input', () => { const v = Number(full.value); if (v > 0) { state.full = v; changed(); } });
+  pass.addEventListener('input', () => { if (pass.value !== '') { state.pass = Number(pass.value); changed(); } });
+  showLv.addEventListener('change', () => { state.showLv = showLv.checked; changed(); });
+}
+function checkLevels() {
+  const msg = document.getElementById('lvMsg');
+  document.getElementById('lvWrap').classList.toggle('off', !state.showLv);
+  const vals = LEVELS.map(l => Number(state.cut[l.k]));
+  let bad = '';
+  if (vals.some(v => !Number.isFinite(v))) bad = '請填寫所有等級分界。';
+  else for (let i = 0; i < vals.length - 1; i++) if (vals[i] <= vals[i + 1]) { bad = `${LEVELS[i].k} 級的分界應高於 ${LEVELS[i + 1].k} 級。`; break; }
+  msg.textContent = state.showLv ? bad : '';
+}
+
+/* ---------- mode ---------- */
+let singleBox, groupBoxes = [];
+function setMode(m) {
+  state.mode = m;
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  document.getElementById('classMode').classList.toggle('hidden', m !== 'class');
+  document.getElementById('gradeMode').classList.toggle('hidden', m !== 'grade');
+  changed();
+}
+function buildSingle() {
+  singleBox = makeBox(document.getElementById('singleBox'), {
+    placeholder: '班別／組別名稱（可留空）', name: state.single.name, text: state.single.text,
+    setText: v => { state.single.text = v; },
+    onText: v => { state.single.text = v; changed(); },
+    onName: v => { state.single.name = v; changed(); }
+  });
+}
+function buildGroups() {
+  const wrap = document.getElementById('groups');
+  wrap.innerHTML = '';
+  groupBoxes = state.groups.map((g, i) => {
+    const d = document.createElement('div');
+    wrap.appendChild(d);
+    return makeBox(d, {
+      placeholder: '名稱', name: g.name, text: g.text, short: true,
+      setText: v => { state.groups[i].text = v; },
+      onText: v => { state.groups[i].text = v; changed(); },
+      onName: v => { state.groups[i].name = v; changed(); }
+    });
+  });
+  document.getElementById('plusG').disabled = state.groups.length >= 6;
+  document.getElementById('minusG').disabled = state.groups.length <= 2;
+}
+
+/* ---------- render: class ---------- */
+let lastExport = null;
+function distTable(stats, labelHead) {
+  const max = Math.max(1, ...stats.bins);
+  const passP = Number(state.pass);
+  return `<div class="tablewrap"><table>
+    <thead><tr><th>${labelHead}</th><th>人數</th><th>百分比</th><th class="barcell"></th></tr></thead>
+    <tbody>${BIN_LABELS.map((lab, i) => {
+      const hi = i === 0 ? 10 : (i + 1) * 10;
+      const fail = hi <= passP;
+      return `<tr><td>${lab}</td><td>${stats.bins[i]}</td><td>${fPct(stats.bins[i], stats.n)}</td>
+        <td class="barcell"><div class="bar ${fail ? 'fail' : ''}" style="width:${stats.bins[i] / max * 100}%"></div></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+function lvTable(stats) {
+  const keys = [...levelRows(), ...(stats.levels['<1'] ? ['<1'] : [])];
+  const max = Math.max(1, ...keys.map(k => stats.levels[k]));
+  return `<div class="tablewrap"><table>
+    <thead><tr><th>等級</th><th>人數</th><th>百分比</th><th class="barcell"></th></tr></thead>
+    <tbody>${keys.map(k => `<tr><td>${lvLabel(k)}</td><td>${stats.levels[k]}</td><td>${fPct(stats.levels[k], stats.n)}</td>
+      <td class="barcell"><div class="bar" style="width:${stats.levels[k] / max * 100}%"></div></td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function renderClass() {
+  const parsed = parse(state.single.text);
+  const s = compute(parsed.rows);
+  paintBox(singleBox, parsed, s);
+  const el = document.getElementById('classResults');
+  const title = state.single.name.trim() ? esc(state.single.name.trim()) + ' 統計結果' : '統計結果';
+  if (!parsed.rows.length) {
+    el.innerHTML = `<h2>${title}</h2><p class="muted">貼上分數後，結果會在這裏即時顯示。</p>`;
+    lastExport = null; return;
+  }
+  const failList = parsed.rows.map((r, i) => ({ r, no: i + 1 }))
+    .filter(x => x.r.status === 'ok' && pctOf(x.r.raw) < Number(state.pass) - 1e-9);
+  el.innerHTML = `
+    <h2>${title}<span class="spacer"></span>${exportBar()}</h2>
+    <div class="tiles">
+      <div class="tile hl"><div class="k">平均分</div><div class="v">${f2(s.mean)}</div>${isFull100() || s.mean == null ? '' : `<div class="s">${f2(pctOf(s.mean))}%</div>`}</div>
+      <div class="tile"><div class="k">標準差（總體）</div><div class="v">${f2(s.sd)}</div></div>
+      <div class="tile hl"><div class="k">合格率</div><div class="v">${fPct(s.passN || 0, s.n)}</div><div class="s">${s.passN || 0} / ${s.n} 人合格（≥${state.pass}%）</div></div>
+      <div class="tile"><div class="k">中位數</div><div class="v">${f2(s.median)}</div></div>
+      <div class="tile"><div class="k">最高／最低</div><div class="v" style="font-size:1.15rem">${fScore(s.max)} / ${fScore(s.min)}</div></div>
+      <div class="tile"><div class="k">人數</div><div class="v">${s.n}</div><div class="s">應考 ${s.total}・缺考 ${s.absent}${s.errors ? `・無法讀取 ${s.errors}` : ''}</div></div>
+    </div>
+    <div class="${state.showLv ? 'two' : ''}">
+      <div><h3>分數分布（百分比分數）</h3>${distTable(s, '分數段')}</div>
+      ${state.showLv ? `<div><h3>等級分布</h3>${lvTable(s)}</div>` : ''}
+    </div>
+    <h3>不合格學生（學號）</h3>
+    <div class="failnums">${failList.length ? failList.map(x => `<span title="${esc(x.r.name)}">${x.no}${x.r.name ? ' ' + esc(x.r.name) : ''}・${fScore(x.r.raw)}</span>`).join('') : '<span class="muted" style="background:none;color:var(--muted)">沒有</span>'}</div>
+  `;
+  // export data
+  const name = state.single.name.trim() || '班別／組別';
+  const sec1 = [['項目', name],
+    ['應考人數', s.total], ['實考人數', s.n], ['缺考人數', s.absent],
+    ['平均分', withPctPlain(s.mean)], ['標準差 (STDEVP)', f2(s.sd)], ['中位數', f2(s.median)],
+    ['最高分', fScore(s.max)], ['最低分', fScore(s.min)],
+    ['合格人數', s.passN || 0], ['合格率', fPct(s.passN || 0, s.n)]];
+  const sec2 = [['分數段', '人數', '百分比'], ...BIN_LABELS.map((l, i) => [l, s.bins[i], fPct(s.bins[i], s.n)])];
+  const secs = [sec1, sec2];
+  if (state.showLv) {
+    const keys = [...levelRows(), ...(s.levels['<1'] ? ['<1'] : [])];
+    secs.push([['等級', '人數', '百分比'], ...keys.map(k => [lvLabel(k), s.levels[k], fPct(s.levels[k], s.n)])]);
+  }
+  lastExport = { name, secs };
+  bindExport();
+}
+
+/* ---------- render: grade ---------- */
+function renderGrade() {
+  const parsedAll = state.groups.map(g => parse(g.text));
+  const statsAll = parsedAll.map(p => compute(p.rows));
+  parsedAll.forEach((p, i) => paintBox(groupBoxes[i], p, statsAll[i]));
+  const allRows = parsedAll.flatMap(p => p.rows);
+  const G = compute(allRows);
+  const names = state.groups.map((g, i) => g.name.trim() || `第${i + 1}欄`);
+  const el = document.getElementById('gradeResults');
+  if (!allRows.length) {
+    el.innerHTML = `<h2>全級統計結果</h2><p class="muted">在上面各欄貼上分數後，結果會在這裏即時顯示。</p>`;
+    lastExport = null; return;
+  }
+  const cols = [...statsAll, G];
+  const head = `<tr><th></th>${names.map(n => `<th>${esc(n)}</th>`).join('')}<th class="grade">全級</th></tr>`;
+  const row = (label, fn) => `<tr><td>${label}</td>${cols.map((c, i) => `<td class="${i === cols.length - 1 ? 'grade' : ''}">${fn(c)}</td>`).join('')}</tr>`;
+  const view = state.view;
+  const cell = (cnt, n) => view === 'pct' ? fPct(cnt, n) : cnt;
+  const heat = (cnt, n) => {
+    const a = n ? cnt / n : 0;
+    return a ? `background: color-mix(in srgb, var(--bar) ${Math.round(a * 55)}%, transparent)` : '';
+  };
+  const distRows = BIN_LABELS.map((lab, b) => `<tr><td>${lab}</td>${cols.map((c, i) =>
+    `<td class="${i === cols.length - 1 ? 'grade' : ''}" style="${i === cols.length - 1 ? '' : heat(c.bins[b], c.n)}">${cell(c.bins[b], c.n)}</td>`).join('')}</tr>`).join('');
+  const lvKeys = [...levelRows(), ...(G.levels['<1'] ? ['<1'] : [])];
+  const lvRowsHtml = lvKeys.map(k => `<tr><td>${lvLabel(k)}</td>${cols.map((c, i) =>
+    `<td class="${i === cols.length - 1 ? 'grade' : ''}" style="${i === cols.length - 1 ? '' : heat(c.levels[k], c.n)}">${cell(c.levels[k], c.n)}</td>`).join('')}</tr>`).join('');
+
+  el.innerHTML = `
+    <h2>全級統計結果<span class="spacer"></span>${exportBar()}</h2>
+    <div class="tiles">
+      <div class="tile hl"><div class="k">全級平均分</div><div class="v">${f2(G.mean)}</div>${isFull100() || G.mean == null ? '' : `<div class="s">${f2(pctOf(G.mean))}%</div>`}</div>
+      <div class="tile"><div class="k">全級標準差</div><div class="v">${f2(G.sd)}</div></div>
+      <div class="tile hl"><div class="k">全級合格率</div><div class="v">${fPct(G.passN || 0, G.n)}</div><div class="s">${G.passN || 0} / ${G.n} 人（≥${state.pass}%）</div></div>
+      <div class="tile"><div class="k">實考人數</div><div class="v">${G.n}</div><div class="s">應考 ${G.total}・缺考 ${G.absent}${G.errors ? `・無法讀取 ${G.errors}` : ''}</div></div>
+    </div>
+    <h3>各班／組比較</h3>
+    <div class="tablewrap"><table><thead>${head}</thead><tbody>
+      ${row('應考人數', c => c.total)}
+      ${row('實考人數', c => c.n)}
+      ${row('缺考人數', c => c.absent)}
+      ${row('平均分', c => withPct(c.mean))}
+      ${row('標準差', c => f2(c.sd))}
+      ${row('中位數', c => f2(c.median))}
+      ${row('最高分', c => fScore(c.max))}
+      ${row('最低分', c => fScore(c.min))}
+      ${row('合格人數', c => c.passN || 0)}
+      ${row('合格率', c => fPct(c.passN || 0, c.n))}
+    </tbody></table></div>
+    <h3 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">分數分布（百分比分數）
+      <span class="seg noprint" id="viewSeg"><button data-v="count" class="${view === 'count' ? 'on' : ''}">人數</button><button data-v="pct" class="${view === 'pct' ? 'on' : ''}">百分比</button></span>
+    </h3>
+    <div class="tablewrap"><table><thead>${head.replace('<th></th>', '<th>分數段</th>')}</thead><tbody>${distRows}</tbody></table></div>
+    ${state.showLv ? `<h3>等級分布</h3>
+    <div class="tablewrap"><table><thead>${head.replace('<th></th>', '<th>等級</th>')}</thead><tbody>${lvRowsHtml}</tbody></table></div>` : ''}
+    <div class="${state.showLv ? 'two' : ''}">
+      <div><h3>全級分數分布</h3>${distTable(G, '分數段')}</div>
+      ${state.showLv ? `<div><h3>全級等級分布</h3>${lvTable(G)}</div>` : ''}
+    </div>
+  `;
+  el.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => { state.view = b.dataset.v; save(); renderGrade(); }));
+
+  const H = ['', ...names, '全級'];
+  const sec1 = [['項目', ...names, '全級'],
+    ['應考人數', ...cols.map(c => c.total)], ['實考人數', ...cols.map(c => c.n)], ['缺考人數', ...cols.map(c => c.absent)],
+    ['平均分', ...cols.map(c => withPctPlain(c.mean))], ['標準差 (STDEVP)', ...cols.map(c => f2(c.sd))],
+    ['中位數', ...cols.map(c => f2(c.median))], ['最高分', ...cols.map(c => fScore(c.max))], ['最低分', ...cols.map(c => fScore(c.min))],
+    ['合格人數', ...cols.map(c => c.passN || 0)], ['合格率', ...cols.map(c => fPct(c.passN || 0, c.n))]];
+  const sec2 = [['分數段（人數）', ...names, '全級'], ...BIN_LABELS.map((l, b) => [l, ...cols.map(c => c.bins[b])])];
+  const sec2p = [['分數段（百分比）', ...names, '全級'], ...BIN_LABELS.map((l, b) => [l, ...cols.map(c => fPct(c.bins[b], c.n))])];
+  const secs = [sec1, sec2, sec2p];
+  if (state.showLv) {
+    secs.push([['等級（人數）', ...names, '全級'], ...lvKeys.map(k => [lvLabel(k), ...cols.map(c => c.levels[k])])]);
+    secs.push([['等級（百分比）', ...names, '全級'], ...lvKeys.map(k => [lvLabel(k), ...cols.map(c => fPct(c.levels[k], c.n))])]);
+  }
+  lastExport = { name: '全級', secs };
+  bindExport();
+}
+
+/* ---------- export ---------- */
+function exportBar() {
+  return `<span class="toolbar noprint">
+    <button class="secondary small" data-x="copy">複製表格</button>
+    <button class="ghost small" data-x="csv">下載 CSV</button>
+    <button class="ghost small" data-x="print">列印</button></span>`;
+}
+function settingsLine() {
+  const parts = [`滿分 ${state.full}`, `合格 ≥${state.pass}%`];
+  if (state.showLv) parts.push('等級分界 ' + LEVELS.map(l => `${l.k}≥${state.cut[l.k]}%`).join(' '));
+  return parts.join('；');
+}
+function bindExport() {
+  document.querySelectorAll('[data-x]').forEach(b => b.onclick = () => {
+    if (!lastExport) return;
+    const x = b.dataset.x;
+    if (x === 'print') { window.print(); return; }
+    const secs = [[[`${lastExport.name} 成績統計`], [settingsLine()]], ...lastExport.secs];
+    if (x === 'copy') {
+      const tsv = secs.map(s => s.map(r => r.join('\t')).join('\n')).join('\n\n');
+      copyText(tsv).then(ok => toast(ok ? '已複製，可直接貼到 Excel／Google Sheet' : '複製失敗，請改用下載 CSV'));
+    } else {
+      const q = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const csv = '﻿' + secs.map(s => s.map(r => r.map(q).join(',')).join('\r\n')).join('\r\n\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${lastExport.name.replace(/[\\/:*?"<>|]/g, '_')}_成績統計.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+  });
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  try {
+    const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
+let toastT;
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200); }
+
+/* ---------- main ---------- */
+function changed() {
+  checkLevels();
+  if (state.mode === 'class') renderClass(); else renderGrade();
+  save();
+}
+load();
+buildSettings();
+buildSingle();
+buildGroups();
+document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.getElementById('plusG').addEventListener('click', () => {
+  if (state.groups.length >= 6) return;
+  state.groups.push({ name: DEFAULT_NAMES[state.groups.length] || '', text: '' });
+  buildGroups(); changed();
+});
+document.getElementById('minusG').addEventListener('click', () => {
+  if (state.groups.length <= 2) return;
+  const last = state.groups[state.groups.length - 1];
+  if (last.text.trim() && !confirm(`「${last.name || '最後一欄'}」已有分數，確定移除？`)) return;
+  state.groups.pop(); buildGroups(); changed();
+});
+setMode(state.mode === 'grade' ? 'grade' : 'class');
+</script>
+</body>
+</html>
