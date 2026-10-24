@@ -1,0 +1,2511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaTeX to PDF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.20/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.20/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.20/contrib/mhchem.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2430; --muted: #5d6b7a; --line: #dde2e8;
+    --accent: #6639ba; --accent-ink: #ffffff; --accent-soft: #efe9fa;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --err: #c62828; --err-soft: #fdecea; --warn: #9a6700; --warn-soft: #fff4d6;
+    --chip: #eef1f4; --desk: #e4e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+      --accent: #b392f0; --accent-ink: #1b0f33; --accent-soft: #2a2140;
+      --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+      --chip: #252d37; --desk: #0d1015;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --panel: #1b2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2c3540;
+    --accent: #b392f0; --accent-ink: #1b0f33; --accent-soft: #2a2140;
+    --ok: #5cc27a; --ok-soft: #173023; --err: #ff7a70; --err-soft: #3a1d1b; --warn: #e3b341; --warn-soft: #362a10;
+    --chip: #252d37; --desk: #0d1015;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height: 1.5;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 32px 16px 64px; }
+  .narrow { max-width: 900px; }
+  .home { display: inline-block; margin-bottom: 16px; font-size: .9rem; color: var(--muted); text-decoration: none; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .privacy { display: inline-flex; gap: 6px; align-items: center; margin-top: 12px; font-size: .85rem; color: var(--ok);
+    background: var(--ok-soft); padding: 4px 10px; border-radius: 999px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 20px; }
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 30px 16px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop .sub { font-size: .85rem; color: var(--muted); margin-top: 6px; }
+  .or { text-align: center; margin-top: 14px; font-size: .9rem; color: var(--muted); }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.ghost { background: var(--chip); color: var(--ink); font-weight: 500; }
+  button.link { background: none; color: var(--accent); padding: 0; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  select { font: inherit; font-size: .9rem; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); font-weight: 500; }
+  .chk { display: inline-flex; align-items: center; gap: 7px; font-size: .9rem; color: var(--ink); cursor: pointer; user-select: none; }
+  .chk input { width: 17px; height: 17px; accent-color: var(--accent); }
+
+  /* toolbar */
+  .tool { display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: flex-end; }
+  .tool .file { flex: 1 1 220px; min-width: 0; }
+  .tool .file .nm { font-weight: 600; word-break: break-all; }
+  .tool .file .meta { font-size: .82rem; color: var(--muted); }
+  .opts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .go { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .go .big { padding: 11px 20px; }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+
+  /* split */
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .split.nosrc { grid-template-columns: minmax(0, 1fr); }
+  .split.nosrc .srcpane { display: none; }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; min-width: 0; }
+  .pane-h { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: .88rem; font-weight: 600; }
+  .pane-h .st { font-weight: 400; color: var(--muted); font-size: .82rem; margin-left: auto; text-align: right; }
+  #src { display: block; width: 100%; height: 72vh; min-height: 360px; border: 0; resize: vertical; padding: 12px 14px; tab-size: 2;
+    font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, "Microsoft JhengHei", monospace; background: var(--panel); color: var(--ink); outline: none; }
+  .desk { background: var(--desk); padding: 18px; height: 72vh; min-height: 360px; overflow: auto; }
+  .sheet-wrap { margin: 0 auto; }
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+    #src { height: 45vh; }
+    .desk { height: auto; max-height: none; padding: 10px; }
+  }
+
+  /* notes */
+  .notes h2 { font-size: .95rem; margin: 0 0 10px; }
+  .notes ul { margin: 0; padding-left: 20px; font-size: .88rem; }
+  .notes li { margin: 3px 0; }
+  .notes .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .notes .good { color: var(--ok); font-size: .9rem; }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: .92rem; }
+  .msg.err { background: var(--err-soft); color: var(--err); }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); }
+  .msg:empty { display: none; }
+  footer { margin-top: 28px; font-size: .84rem; color: var(--muted); }
+  footer h3 { font-size: .9rem; color: var(--ink); margin: 18px 0 4px; }
+  footer ul, footer ol { padding-left: 18px; margin: 4px 0 0; }
+  code.k { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85em; background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+
+  /* ===================== the document ===================== */
+  .doc {
+    --fs: 10pt; --pi: 1.5em; --ps: 0; --lh: 1.25;
+    --ff: "KaTeX_Main", "Latin Modern Roman", "CMU Serif", "Times New Roman", "Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", PMingLiU, MingLiU, "Songti TC", "Songti SC", SimSun, serif;
+    background: #fff; color: #000; font-family: var(--ff); font-size: var(--fs); line-height: var(--lh);
+    text-align: justify; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .doc.ff-times { --ff: "Times New Roman", Times, "Nimbus Roman", "TeX Gyre Termes", "Noto Serif TC", PMingLiU, "Songti TC", serif; }
+  .doc.ff-sans { --ff: "Helvetica Neue", Helvetica, Arial, "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  .sheet { box-shadow: 0 2px 10px rgba(0,0,0,.18); margin: 0 auto; }
+  .doc .p { margin: 0 0 var(--ps); }
+  .doc .p.ind { text-indent: var(--pi); }
+  .doc .p.ind > .hrow { text-indent: 0; }
+  .doc .al-c { text-align: center; } .doc .al-l { text-align: left; } .doc .al-r { text-align: right; }
+  .doc .b { font-weight: bold; } .doc .i { font-style: italic; }
+  .doc .tt, .doc code { font-family: "KaTeX_Typewriter", "Latin Modern Mono", Consolas, "Courier New", monospace; }
+  .doc .sf { font-family: "KaTeX_SansSerif", "Latin Modern Sans", Helvetica, Arial, "Microsoft JhengHei", sans-serif; }
+  .doc .rm { font-family: var(--ff); } .doc .sc { font-variant: small-caps; }
+  .doc .sec { font-weight: bold; text-align: left; line-height: 1.25; break-after: avoid; page-break-after: avoid; }
+  .doc h1.sec { font-size: calc(var(--fs) * 2.074); margin: 1.4em 0 1em; }
+  .doc h2.sec { font-size: calc(var(--fs) * 1.44); margin: 1.15em 0 .6em; }
+  .doc h3.sec { font-size: calc(var(--fs) * 1.2); margin: 1em 0 .5em; }
+  .doc h4.sec { font-size: var(--fs); margin: .9em 0 .4em; }
+  .doc .sec.al-c { text-align: center; }
+  .doc .sn { margin-right: 1em; }
+  .doc .chap { font-size: calc(var(--fs) * 1.44); margin-bottom: .6em; }
+  .doc .titleblk { text-align: center; margin: 1.2em 0 2.2em; }
+  .doc .ttl { font-size: calc(var(--fs) * 1.728); line-height: 1.3; margin-bottom: .9em; }
+  .doc .au { display: flex; justify-content: center; gap: .5em 3em; flex-wrap: wrap; font-size: calc(var(--fs) * 1.2); margin-bottom: .6em; }
+  .doc .dt { font-size: calc(var(--fs) * 1.2); }
+  .doc .lst { margin: .45em 0; text-indent: 0; }
+  .doc .lst .lst { margin: .2em 0; }
+  .doc .it { display: flex; align-items: baseline; margin-top: .3em; }
+  .doc .it:first-child { margin-top: 0; }
+  .doc .nosep .it { margin-top: 0; }
+  .doc .lbl { flex: none; width: var(--lm, 2.5em); padding-right: .45em; text-align: right; white-space: nowrap; }
+  .doc .ib { flex: 1 1 auto; min-width: 0; }
+  .doc .hfr { float: right; margin-left: 1em; text-indent: 0; }
+  .doc .hrow .fill + .seg { flex-shrink: 0; max-width: 70%; }
+  .doc .ib > .p:last-child { margin-bottom: 0; }
+  .doc .ib > .p.ind:first-child { text-indent: 0; }
+  .doc .it.desc { display: block; }
+  .doc .it.desc .ib { padding-left: 1.5em; }
+  .doc .it.desc .ib > .p:first-child { text-indent: -1.5em; }
+  .doc .dlbl { font-weight: bold; }
+  .doc .correct > .lbl { font-weight: bold; }
+  .doc .pts { white-space: nowrap; }
+  .doc .tasks { display: grid; gap: .25em 1em; margin: .4em 0; }
+  .doc .tasks .it { margin: 0; --lm: 1.8em; }
+  .doc .inl-list .ili { margin-right: .8em; }
+  .doc .dm { margin: .55em 0; text-indent: 0; }
+  .doc .dm .katex-display { margin: 0; }
+  .doc .katex { font-size: 1.1em; text-indent: 0; }
+  .doc .tab { border-collapse: collapse; display: inline-table; margin: .3em 0; vertical-align: middle; text-indent: 0; line-height: 1.25; }
+  .doc .tab.flex { display: table; }
+  .doc .tab td { padding: .12em 6pt; vertical-align: baseline; }
+  .doc .tab td.pc { vertical-align: top; text-align: left; }
+  .doc .tab td > .p { margin: 0; text-indent: 0; }
+  .doc .mini { display: inline-block; vertical-align: middle; text-align: left; text-indent: 0; }
+  .doc .mini .p.ind { text-indent: 0; }
+  .doc .va-t { vertical-align: top; } .doc .va-b { vertical-align: bottom; } .doc .va-c { vertical-align: middle; }
+  .doc .float { margin: 1em 0; break-inside: avoid; page-break-inside: avoid; }
+  .doc .caption { margin: .5em auto; max-width: 92%; text-align: center; text-indent: 0; }
+  .doc .vs { display: block; }
+  .doc .lb { display: block; }
+  .doc .sp, .doc .hs { display: inline-block; }
+  .doc .hrow { display: flex; align-items: baseline; width: 100%; text-indent: 0; }
+  .doc .hrow .seg { flex: 0 1 auto; min-width: 0; }
+  .doc .hrow .fill { flex: 1 1 0; min-width: .6em; align-self: stretch; }
+  .doc .hrow .fill.f-d { align-self: baseline; height: .2em; margin: 0 .3em; background-image: radial-gradient(circle, #000 .045em, transparent .06em); background-size: .44em .2em; background-repeat: repeat-x; background-position: left bottom; }
+  .doc .hrow .fill.f-r { align-self: baseline; height: .1em; border-bottom: .4pt solid #000; margin: 0 .2em; }
+  .doc .hf-s, .doc .hf-d, .doc .hf-r { display: inline-block; width: 1em; }
+  .doc .blank { display: inline-block; border-bottom: .5pt solid #000; height: .95em; vertical-align: -.15em; max-width: 100%; }
+  .doc .fillin.ans { display: inline-block; border-bottom: .5pt solid #000; text-align: center; }
+  .doc .ul { text-decoration: underline; text-underline-offset: .18em; text-decoration-thickness: .06em; }
+  .doc .uu { text-decoration: underline double; } .doc .uw { text-decoration: underline wavy; } .doc .ud { text-decoration: underline dotted; } .doc .uda { text-decoration: underline dashed; }
+  .doc .fbox { border: .4pt solid #000; padding: 0 3pt; }
+  .doc .cbox { padding: 0 3pt; }
+  .doc .rule { display: inline-block; background: currentColor; }
+  .doc .ig { vertical-align: bottom; }
+  .doc .missing { display: inline-block; border: 1px dashed #c62828; color: #c62828; padding: .3em .7em; font: .8rem system-ui, sans-serif; border-radius: 4px; text-indent: 0; }
+  .doc .tikz { display: inline-block; vertical-align: middle; text-indent: 0; text-align: left; line-height: 1; }
+  .doc .tikz svg { display: block; overflow: visible; }
+  .doc .tikz.tz-in { vertical-align: baseline; }
+  .doc .tz-wait { display: inline-block; font: .75rem system-ui, sans-serif; color: #888; border: 1px dashed #bbb; padding: 1.4em 1.8em; border-radius: 6px; }
+  .doc .tz-err { display: inline-block; font: .75rem system-ui, sans-serif; color: #c62828; border: 1px dashed #c62828; padding: .8em 1em; border-radius: 6px; max-width: 30em; white-space: normal; }
+  .doc .rsz { display: inline-block; }
+  .doc .rsz svg, .doc .rsz img { width: 100% !important; height: auto !important; }
+  .doc .quote { margin: .5em 2.5em; }
+  .doc .abstract { margin: 1em 3em; font-size: calc(var(--fs) * .9); }
+  .doc .abs-h { text-align: center; font-weight: bold; margin-bottom: .4em; }
+  .doc .thm, .doc .proof { margin: .6em 0; }
+  .doc .fns { margin-top: 2em; font-size: calc(var(--fs) * .85); text-indent: 0; }
+  .doc .fns hr { width: 30%; margin: 0 0 .5em; border: 0; border-top: .4pt solid #000; }
+  .doc .fnm { font-size: .7em; }
+  .doc .toc { margin-bottom: 1.5em; }
+  .doc .tocl { display: flex; gap: .8em; margin: .15em 0; }
+  .doc .tocl.l1 { font-weight: bold; margin-top: .5em; }
+  .doc .tocl.l2 { padding-left: 1.5em; } .doc .tocl.l3 { padding-left: 3.8em; }
+  .doc .frm { border: .8pt solid #000; border-radius: 4px; margin: .7em 0; overflow: hidden; break-inside: avoid; }
+  .doc .frm-t { background: #444; color: #fff; padding: .25em .7em; font-weight: bold; }
+  .doc .frm-b { padding: .5em .8em; }
+  .doc .frm.leftbar { border: 0; border-left: 3px solid #888; border-radius: 0; }
+  .doc .soln { border: .8pt solid #000; padding: .5em .8em; margin: .5em 0; }
+  .doc .lines { margin: .4em 0; background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(.3in - .6pt), #000 calc(.3in - .6pt), #000 .3in); }
+  .doc .dlines { margin: .4em 0; background: linear-gradient(to right, #fff 50%, transparent 50%) 0 0 / 4px 100%, repeating-linear-gradient(to bottom, transparent 0, transparent calc(.3in - .8pt), #000 calc(.3in - .8pt), #000 .3in); }
+  .doc .ebox { margin: .4em 0; border: .8pt solid #000; }
+  .doc .grid { margin: .4em 0; border: .5pt solid #999; background-image: linear-gradient(#bbb .5pt, transparent .5pt), linear-gradient(90deg, #bbb .5pt, transparent .5pt); background-size: 5mm 5mm; }
+  .doc .ansline { text-align: right; margin: .5em 0; }
+  .doc .mcols { column-gap: 2em; margin: .5em 0; }
+  .doc .cols { display: flex; gap: 4%; }
+  .doc .verb { font-family: "KaTeX_Typewriter", Consolas, monospace; font-size: .92em; white-space: pre-wrap; margin: .6em 0; text-align: left; line-height: 1.35; }
+  .doc .latex sup { font-size: .75em; vertical-align: .28em; margin-left: -.36em; margin-right: -.15em; }
+  .doc .latex sub { font-size: 1em; vertical-align: -.5ex; margin-left: -.1667em; margin-right: -.125em; }
+  .doc .circ { border: .6pt solid; border-radius: 50%; padding: 0 .25em; }
+  .doc .nobr { white-space: nowrap; }
+  .doc a { color: inherit; text-decoration: none; }
+  .doc .err { color: #c62828; }
+  .doc .katex .katex-mathml { display: none; }
+  .doc mark { background: #ff0; }
+  .doc .bib .it { --lm: 2.6em; }
+  .doc .pb { height: 0; border-top: 1px dashed #b9c2cc; margin: 2em calc(-1 * var(--mr, 2cm)) 2em calc(-1 * var(--ml, 2cm)); position: relative; }
+  .doc .pb::after { content: "page break"; position: absolute; right: 8px; top: -9px; font: 10px system-ui, sans-serif; color: #9aa7b4; background: #fff; padding: 0 4px; }
+  .doc .titlepage { min-height: 20cm; }
+
+  #print { display: none; }
+  #tzStage { position: fixed; left: 0; top: 0; opacity: 0; pointer-events: none; z-index: -1; width: 600px; }
+  @media print {
+    @page { margin: 2cm; }
+    body { background: #fff !important; }
+    body > :not(#print) { display: none !important; }
+    #print { display: block !important; }
+    #print .doc { padding: 0 !important; width: auto !important; min-height: 0 !important; box-shadow: none !important; zoom: 1 !important; }
+    .doc .pb { break-after: page; page-break-after: always; border: 0; margin: 0; }
+    .doc .pb::after { display: none; }
+    .doc .tz-wait { display: none; }
+    .doc .it, .doc .dm, .doc .tab, .doc .hrow { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <a href="./" class="home">← All tools</a>
+  <header>
+    <h1>LaTeX to PDF</h1>
+    <p>Open a <b>.tex</b> file, check the preview, then save it as a PDF. Handles maths, Chinese text, tables, lists, <b>siunitx</b> units, exam-class questions, and TikZ / circuitikz diagrams.</p>
+    <span class="privacy">🔒 Runs in your browser — your files are not uploaded</span>
+  </header>
+
+  <div class="card narrow" id="loadCard">
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <div><strong>Choose a .tex file</strong> or drop it here</div>
+      <div class="sub">Add any images and <code class="k">\input</code> files at the same time — or drop an Overleaf <b>.zip</b></div>
+    </div>
+    <input type="file" id="fileIn" multiple accept=".tex,.zip,.png,.jpg,.jpeg,.gif,.svg,.webp,.pdf,.eps,.sty,.cls,.bib,.txt,.ltx" hidden>
+    <div class="or">or <button class="link" id="sampleBtn">try a sample physics paper</button> · or <button class="link" id="blankBtn">type / paste LaTeX</button></div>
+    <div class="msg err" id="loadMsg"></div>
+  </div>
+
+  <div id="work" hidden>
+    <div class="card tool">
+      <div class="file">
+        <div class="nm" id="fname"></div>
+        <div class="meta" id="fmeta"></div>
+      </div>
+      <div class="opts">
+        <label class="f" id="mainWrap" hidden>Main file<select id="mainSel"></select></label>
+        <label class="f">Paper<select id="paperSel">
+          <option value="auto">From file</option><option value="a4">A4</option><option value="a3">A3</option><option value="letter">Letter</option>
+        </select></label>
+        <label class="f">Margins<select id="marginSel">
+          <option value="auto">From file</option><option value="1.27cm">Narrow (1.27 cm)</option><option value="2cm">2 cm</option><option value="2.54cm">2.54 cm</option><option value="3cm">3 cm</option>
+        </select></label>
+        <label class="f">Font<select id="fontSel">
+          <option value="auto">From file</option><option value="cm">LaTeX (Computer Modern)</option><option value="times">Times</option><option value="sans">Sans serif</option>
+        </select></label>
+        <label class="f">Size<select id="sizeSel">
+          <option value="auto">From file</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option>
+        </select></label>
+        <label class="chk" id="ansWrap" hidden><input type="checkbox" id="ansChk"> Show answers</label>
+        <label class="chk"><input type="checkbox" id="numChk" checked> Page numbers</label>
+      </div>
+      <div class="go">
+        <button class="ghost" id="addBtn" title="Add images or other .tex files">+ Add files</button>
+        <button class="ghost" id="srcBtn">Hide source</button>
+        <button class="big" id="pdfBtn">Save as PDF</button>
+      </div>
+    </div>
+    <div class="msg warn" id="tzMsg"></div>
+
+    <div class="split" id="split">
+      <div class="pane srcpane">
+        <div class="pane-h">Source <span class="st" id="srcSt">Edits update the preview</span></div>
+        <textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      </div>
+      <div class="pane">
+        <div class="pane-h">Preview <span class="st" id="prevSt"></span></div>
+        <div class="desk" id="desk"><div class="sheet-wrap" id="sheetWrap"><div class="doc sheet" id="doc"></div></div></div>
+      </div>
+    </div>
+
+    <div class="card notes" id="notes"></div>
+  </div>
+
+  <footer class="narrow">
+    <h3>Saving the PDF</h3>
+    <ol>
+      <li>Click <b>Save as PDF</b>. Your browser's print window opens.</li>
+      <li>Set <b>Destination</b> (or <b>Printer</b>) to <b>Save as PDF</b>.</li>
+      <li>Under <b>More settings</b>, untick <b>Headers and footers</b> so the date and web address are not printed. Leave margins on <b>Default</b> — the page size and margins come from your file.</li>
+    </ol>
+    <h3>What to expect</h3>
+    <ul>
+      <li>This is a fast, in-browser converter, not a full LaTeX installation. Page breaks and spacing are close to LaTeX but not identical.</li>
+      <li>Diagrams (<code class="k">tikzpicture</code>, <code class="k">circuitikz</code>) are drawn by a small TeX engine that downloads the first time it's needed. Chinese text inside a diagram can't be drawn.</li>
+      <li>Not supported: <code class="k">pgfplots</code>, BibTeX/biblatex (use <code class="k">thebibliography</code>), headers and footers, and packages that need a real TeX run. Anything skipped is listed under <b>Notes</b>.</li>
+      <li>Images: PNG, JPG, SVG and PDF work. Convert EPS images to PDF or PNG first.</li>
+    </ul>
+  </footer>
+</div>
+<div id="print"></div>
+<div id="tzStage" aria-hidden="true"></div>
+<style id="pageStyle"></style>
+
+<script>
+/* LaTeX -> HTML engine (runs in browser and node). Needs a KaTeX object passed in. */
+(function (root) {
+'use strict';
+
+const PAR = '\u0001', BS = '\u0002', BE = '\u0003', NOI = '\u0004', HF = '\u0005', RF = '\u0006', AL = '\u0007';
+const PH0 = '\u000e', PH1 = '\u000f';
+
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/* ---------------- scanning helpers ---------------- */
+function skipSp(s, i) { // spaces and at most one newline
+  let nl = 0, j = i;
+  while (j < s.length && (s[j] === ' ' || s[j] === '\t' || s[j] === '\n' || s[j] === '\r')) {
+    if (s[j] === '\n') { nl++; if (nl > 1) return i; }
+    j++;
+  }
+  return j;
+}
+function matchBrace(s, i) {
+  let d = 0;
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (c === '\\') { j++; continue; }
+    if (c === '{') d++;
+    else if (c === '}') { d--; if (d === 0) return j; }
+  }
+  return -1;
+}
+function readArg(s, i) {
+  const j = skipSp(s, i);
+  if (j >= s.length) return null;
+  const c = s[j];
+  if (c === '{') { const e = matchBrace(s, j); if (e < 0) return [s.slice(j + 1), s.length]; return [s.slice(j + 1, e), e + 1]; }
+  if (c === '\\') { const m = /^\\([a-zA-Z@]+\*?|.)/.exec(s.slice(j, j + 60)); if (!m) return [c, j + 1]; return [m[0], j + m[0].length]; }
+  if (c === '}' || c === PAR) return null;
+  return [c, j + 1];
+}
+function readOpt(s, i) {
+  const j = skipSp(s, i);
+  if (s[j] !== '[') return null;
+  let d = 0;
+  for (let k = j + 1; k < s.length; k++) {
+    const c = s[k];
+    if (c === '\\') { k++; continue; }
+    if (c === '{') d++; else if (c === '}') d--;
+    else if (c === ']' && d <= 0) return [s.slice(j + 1, k), k + 1];
+  }
+  return null;
+}
+function readParen(s, i) { // (n) style args for tasks
+  const j = skipSp(s, i);
+  if (s[j] !== '(') return null;
+  const e = s.indexOf(')', j);
+  if (e < 0) return null;
+  return [s.slice(j + 1, e), e + 1];
+}
+function findEnd(s, i, name) {
+  const re = /\\(begin|end)\s*\{([^}]*)\}/g; re.lastIndex = i; let d = 1, m;
+  while ((m = re.exec(s))) {
+    if (m[2].trim() !== name) continue;
+    if (m[1] === 'begin') d++; else { d--; if (d === 0) return [m.index, re.lastIndex]; }
+  }
+  return [s.length, s.length];
+}
+// split s at top level (not inside braces / environments / $..$) by a matcher.
+// matcher(s, i) returns length of separator at i (0 if none). Returns [{text, sep, sepStart}].
+function splitTop(s, matcher) {
+  const out = []; let d = 0, ed = 0, last = 0, math = false;
+  let pendingSep = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '\\') {
+      if (s.startsWith('\\begin', i) && !/[a-zA-Z]/.test(s[i + 6] || '')) { ed++; i += 5; continue; }
+      if (s.startsWith('\\end', i) && !/[a-zA-Z]/.test(s[i + 4] || '')) { ed--; i += 3; continue; }
+      if (d === 0 && ed === 0 && !math) {
+        const L = matcher(s, i);
+        if (L) { out.push({ text: s.slice(last, i), sep: pendingSep }); pendingSep = s.slice(i, i + L); last = i + L; i += L - 1; continue; }
+      }
+      i++; continue;
+    }
+    if (c === '{') d++;
+    else if (c === '}') d--;
+    else if (c === '$' && d === 0) math = !math;
+    else if (d === 0 && ed === 0 && !math) {
+      const L = matcher(s, i);
+      if (L) { out.push({ text: s.slice(last, i), sep: pendingSep }); pendingSep = s.slice(i, i + L); last = i + L; i += L - 1; continue; }
+    }
+  }
+  out.push({ text: s.slice(last), sep: pendingSep });
+  return out;
+}
+function parseKV(str) {
+  const m = new Map();
+  if (!str) return m;
+  for (const part of splitTop(str, (s, i) => s[i] === ',' ? 1 : 0)) {
+    const t = part.text.trim(); if (!t) continue;
+    const k = t.indexOf('=');
+    if (k < 0) m.set(t, true);
+    else { let v = t.slice(k + 1).trim(); if (v[0] === '{' && v[v.length - 1] === '}') v = v.slice(1, -1); m.set(t.slice(0, k).trim(), v); }
+  }
+  return m;
+}
+
+/* ---------------- lengths & colours ---------------- */
+const UNIT_PT = { pt: 1, bp: 1.00375, mm: 2.84528, cm: 28.4528, in: 72.27, pc: 12, sp: 1 / 65536, dd: 1.07, cc: 12.84, px: 0.75 };
+function cssLen(str) {
+  if (str == null) return null;
+  str = String(str).trim().replace(/\s+(plus|minus)\s.*$/, '');
+  if (!str) return null;
+  if (/\\fill|\\stretch|\\hfill|\\vfill/.test(str)) return 'fill';
+  let m = /^([+-]?\s*[\d.]*)\s*\\(textwidth|linewidth|columnwidth|hsize|textheight|paperwidth|paperheight|baselineskip|parindent|parskip|unitlength|width|height|tabcolsep|totalheight|headheight)\b/.exec(str);
+  if (m) {
+    let f = m[1].replace(/\s/g, '');
+    f = (f === '' || f === '+') ? 1 : (f === '-' ? -1 : parseFloat(f));
+    if (isNaN(f)) f = 1;
+    switch (m[2]) {
+      case 'textwidth': case 'linewidth': case 'columnwidth': case 'hsize': case 'width': return +(f * 100).toFixed(3) + '%';
+      case 'textheight': case 'height': case 'totalheight': return +(f * 23).toFixed(3) + 'cm';
+      case 'paperwidth': return +(f * 21).toFixed(3) + 'cm';
+      case 'paperheight': return +(f * 29.7).toFixed(3) + 'cm';
+      case 'baselineskip': return +(f * 1.2).toFixed(3) + 'em';
+      case 'parindent': return +(f * 1.5).toFixed(3) + 'em';
+      case 'parskip': return +(f * 0.6).toFixed(3) + 'em';
+      case 'tabcolsep': return +(f * 6).toFixed(3) + 'pt';
+      default: return +(f).toFixed(3) + 'pt';
+    }
+  }
+  m = /^([+-]?\d*\.?\d+)(pt|bp|mm|cm|in|pc|em|ex|sp|dd|cc|mu|px)?/.exec(str.replace(/\s+/g, ''));
+  if (m) {
+    const v = parseFloat(m[1]); const u = m[2] || 'pt';
+    if (u === 'em' || u === 'ex' || u === 'mm' || u === 'cm' || u === 'in') return v + u;
+    if (u === 'mu') return +(v / 18).toFixed(3) + 'em';
+    return +(v * UNIT_PT[u] * 0.99626).toFixed(3) + 'pt';
+  }
+  return null;
+}
+const COLORS = {
+  black: [0, 0, 0], white: [255, 255, 255], red: [255, 0, 0], green: [0, 255, 0], blue: [0, 0, 255], cyan: [0, 255, 255],
+  magenta: [255, 0, 255], yellow: [255, 255, 0], gray: [128, 128, 128], grey: [128, 128, 128], darkgray: [64, 64, 64],
+  lightgray: [191, 191, 191], brown: [191, 128, 64], lime: [191, 255, 0], olive: [128, 128, 0], orange: [255, 128, 0],
+  pink: [255, 191, 191], purple: [191, 0, 64], teal: [0, 128, 128], violet: [128, 0, 128],
+  navyblue: [0, 0, 128], royalblue: [0, 113, 188], forestgreen: [0, 155, 85], maroon: [175, 50, 53], bluegreen: [0, 179, 184],
+  emerald: [0, 169, 157], goldenrod: [255, 223, 66], redorange: [242, 96, 53], brickred: [182, 50, 28], skyblue: [70, 197, 221],
+  cerulean: [0, 162, 227], junglegreen: [0, 169, 154], darkorchid: [164, 83, 138], mahogany: [169, 52, 31], plum: [146, 38, 143]
+};
+function parseColor(spec, user) {
+  spec = String(spec || '').trim();
+  if (!spec) return null;
+  const base = (name) => {
+    name = name.trim();
+    if (user && user[name]) return user[name];
+    const k = name.toLowerCase();
+    if (COLORS[k]) return COLORS[k];
+    if (/^#?[0-9a-f]{6}$/i.test(name)) { const h = name.replace('#', ''); return [0, 2, 4].map(o => parseInt(h.slice(o, o + 2), 16)); }
+    return null;
+  };
+  const parts = spec.split('!');
+  let c = base(parts[0]); if (!c) return null;
+  for (let i = 1; i < parts.length; i += 2) {
+    const p = Math.max(0, Math.min(100, parseFloat(parts[i]))) / 100;
+    const o = parts[i + 1] !== undefined ? (base(parts[i + 1]) || [255, 255, 255]) : [255, 255, 255];
+    c = c.map((v, k) => Math.round(v * p + o[k] * (1 - p)));
+  }
+  return c;
+}
+function colorFromModel(model, vals) {
+  model = model.trim(); const v = vals.split(/[\s,]+/).filter(Boolean).map(Number);
+  switch (model) {
+    case 'rgb': return v.map(x => Math.round(x * 255));
+    case 'RGB': return v.map(x => Math.round(x));
+    case 'HTML': { const h = vals.trim(); return [0, 2, 4].map(o => parseInt(h.slice(o, o + 2), 16)); }
+    case 'gray': return [v[0], v[0], v[0]].map(x => Math.round(x * 255));
+    case 'cmyk': { const [C, M, Y, K] = v; return [C, M, Y].map(x => Math.round(255 * (1 - x) * (1 - K))); }
+    case 'cmy': return v.map(x => Math.round(255 * (1 - x)));
+    default: return null;
+  }
+}
+const rgbCss = (c) => c ? `rgb(${c[0]},${c[1]},${c[2]})` : '';
+
+/* ---------------- source preparation ---------------- */
+function protectVerbatim(s, store) {
+  s = s.replace(/\\begin\{comment\}[\s\S]*?\\end\{comment\}/g, '');
+  s = s.replace(/\\begin\{(verbatim\*?|lstlisting|Verbatim|minted|alltt)\}(\[[^\]\n]*\])?(\{[^}\n]*\})?\n?([\s\S]*?)\\end\{\1\}/g,
+    (all, env, o, a, body) => { store.push({ block: true, text: body.replace(/\n$/, '') }); return PH0 + (store.length - 1) + PH1; });
+  s = s.replace(/\\(verb|lstinline)\*?(?:\[[^\]]*\])?([^a-zA-Z\s{])([^\n]*?)\2/g,
+    (all, c, d, body) => { store.push({ block: false, text: body }); return PH0 + (store.length - 1) + PH1; });
+  s = s.replace(/\\lstinline\{([^}]*)\}/g, (all, body) => { store.push({ block: false, text: body }); return PH0 + (store.length - 1) + PH1; });
+  return s;
+}
+function stripComments(s) {
+  let out = '', i = 0; const n = s.length;
+  while (i < n) {
+    const c = s[i];
+    if (c === '\\') { out += s.slice(i, i + 2); i += 2; continue; }
+    if (c === '%') {
+      let j = s.indexOf('\n', i); if (j < 0) { i = n; break; }
+      j++; // eat newline and leading spaces of next line
+      // ...but keep a paragraph break if next line is blank
+      if (s[j] === '\n' || /^[ \t]*\n/.test(s.slice(j, j + 50))) { out += '\n'; i = j; continue; }
+      while (s[j] === ' ' || s[j] === '\t') j++;
+      i = j; continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+function baseName(p) { return String(p).replace(/\\/g, '/').split('/').pop(); }
+
+/* ---------------- siunitx ---------------- */
+const SI_PREF = { quecto: 'q', ronto: 'r', yocto: 'y', zepto: 'z', atto: 'a', femto: 'f', pico: 'p', nano: 'n', micro: '\\mu ', milli: 'm', centi: 'c', deci: 'd', deca: 'da', deka: 'da', hecto: 'h', kilo: 'k', mega: 'M', giga: 'G', tera: 'T', peta: 'P', exa: 'E', zetta: 'Z', yotta: 'Y', ronna: 'R', quetta: 'Q' };
+const SI_UNIT = {
+  metre: 'm', meter: 'm', second: 's', kilogram: 'kg', gram: 'g', ampere: 'A', kelvin: 'K', mole: 'mol', candela: 'cd',
+  newton: 'N', joule: 'J', watt: 'W', volt: 'V', ohm: '\\Omega', coulomb: 'C', hertz: 'Hz', pascal: 'Pa', tesla: 'T',
+  weber: 'Wb', farad: 'F', henry: 'H', siemens: 'S', electronvolt: 'eV', minute: 'min', hour: 'h', day: 'd', litre: 'L',
+  liter: 'L', becquerel: 'Bq', sievert: 'Sv', gray: 'Gy', lumen: 'lm', lux: 'lx', radian: 'rad', steradian: 'sr',
+  atomicmassunit: 'u', dalton: 'Da', bar: 'bar', hectare: 'ha', tonne: 't', astronomicalunit: 'au', decibel: 'dB',
+  neper: 'Np', bel: 'B', katal: 'kat', angstrom: '\\text{\u00c5}', barn: 'b', knot: 'kn', mmHg: 'mmHg', lightyear: 'ly',
+  calorie: 'cal', year: 'yr', rpm: 'rpm', clight: 'c', electronmass: 'm_e', planckbar: '\\hbar', elementarycharge: 'e',
+  kilowatthour: 'kWh', kWh: 'kWh'
+};
+const SI_RAW = { degree: '{}^{\\circ}', arcminute: '{}^{\\prime}', arcsecond: '{}^{\\prime\\prime}', percent: '\\%', degreeCelsius: '{}^{\\circ}\\mathrm{C}', celsius: '{}^{\\circ}\\mathrm{C}' };
+const SI_NOSPACE = new Set(['degree', 'arcminute', 'arcsecond']);
+const SI_ABBR = (() => {
+  const o = {}; const list = 'fg pg ng ug mg g kg pm nm um mm cm dm m km as fs ps ns us ms s fmol pmol nmol umol mmol mol kmol pA nA uA mA A kA ul ml l hl uL mL L hL mHz Hz kHz MHz GHz THz mN N kN MN Pa kPa MPa GPa mohm kohm Mohm pV nV uV mV V kV W uW mW kW MW GW J uJ mJ kJ eV meV keV MeV GeV TeV kWh F fF pF nF uF mF K dB';
+  for (const a of list.split(' ')) o[a] = a.replace(/^u/, '\\mu ').replace(/ohm$/, '\\Omega');
+  return o;
+})();
+function siLiteral(u) {
+  u = u.trim(); if (!u) return '';
+  let out = ''; let i = 0;
+  while (i < u.length) {
+    const c = u[i];
+    if (/[A-Za-z\u00b5\u03bc\u03a9\u2126\u00c5]/.test(c)) {
+      let j = i; while (j < u.length && /[A-Za-z\u00b5\u03bc\u03a9\u2126\u00c5]/.test(u[j])) j++;
+      let w = u.slice(i, j).replace(/[\u00b5\u03bc]/g, '\\mu ').replace(/[\u03a9\u2126]/g, '\\Omega ').replace(/\u00c5/g, '\\text{\u00c5}');
+      out += '\\mathrm{' + w + '}'; i = j; continue;
+    }
+    if (c === '.' || c === '~' || c === ' ' || c === '*') { out += '\\,'; while (u[i + 1] === ' ') i++; i++; continue; }
+    if (c === '\u00b0') { out += '{}^{\\circ}'; i++; continue; }
+    if (c === '%') { out += '\\%'; i++; continue; }
+    if (c === '^') {
+      const r = readArg(u, i + 1);
+      if (r) { out += '^{' + r[0] + '}'; i = r[1]; continue; }
+      const m = /^\^([+-]?\d+)/.exec(u.slice(i)); if (m) { out += '^{' + m[1] + '}'; i += m[0].length; continue; }
+    }
+    out += c; i++;
+  }
+  return out;
+}
+function siUnit(u) {
+  u = String(u || '').trim(); if (!u) return { tex: '', nospace: false };
+  if (!/\\[a-zA-Z]/.test(u)) return { tex: siLiteral(u), nospace: /^\u00b0/.test(u) };
+  const items = []; let pre = '', per = false, pw = null, i = 0, raiseNext = null;
+  let nospace = false;
+  while (i < u.length) {
+    const c = u[i];
+    if (c === ' ' || c === '\t' || c === '\n' || c === '.' || c === '~') { i++; continue; }
+    if (c === '\\') {
+      const m = /^\\([a-zA-Z]+)/.exec(u.slice(i));
+      if (!m) { i += 2; continue; }
+      const name = m[1]; i += m[0].length;
+      if (SI_PREF[name] !== undefined) { pre += SI_PREF[name]; continue; }
+      if (name === 'per') { per = true; continue; }
+      if (name === 'square') { pw = 2; continue; }
+      if (name === 'cubic') { pw = 3; continue; }
+      if (name === 'raiseto') { const r = readArg(u, i); if (r) { raiseNext = r[0]; i = r[1]; } continue; }
+      const last = items[items.length - 1];
+      if (name === 'squared' || name === 'cubed') { if (last) last.p = (last.p < 0 ? -1 : 1) * (name === 'squared' ? 2 : 3); continue; }
+      if (name === 'tothe') { const r = readArg(u, i); if (r) { i = r[1]; if (last) last.p = (last.p < 0 ? '-' : '') + r[0]; } continue; }
+      if (name === 'of') { const r = readArg(u, i); if (r) { i = r[1]; if (last) last.sub = r[0]; } continue; }
+      if (name === 'highlight' || name === 'cancel') { const r = readArg(u, i); if (r) i = r[1]; continue; }
+      let tex, raw = false;
+      if (SI_RAW[name] !== undefined) { tex = SI_RAW[name]; raw = true; if (!items.length && SI_NOSPACE.has(name)) nospace = true; }
+      else if (SI_UNIT[name] !== undefined) tex = SI_UNIT[name];
+      else if (SI_ABBR[name] !== undefined) tex = SI_ABBR[name];
+      else tex = name;
+      let p = pw || 1; if (raiseNext) { p = raiseNext; raiseNext = null; }
+      if (per) p = typeof p === 'number' ? -p : '-' + p;
+      items.push({ tex: raw ? tex : '\\mathrm{' + pre + tex + '}', p });
+      pre = ''; per = false; pw = null;
+      continue;
+    }
+    // literal chunk
+    let j = i; while (j < u.length && u[j] !== '\\') j++;
+    items.push({ tex: siLiteral(u.slice(i, j)), p: 1 }); i = j;
+  }
+  const tex = items.map(x => x.tex + (x.sub ? '_{\\mathrm{' + x.sub + '}}' : '') + (x.p === 1 || x.p === '1' ? '' : '^{' + x.p + '}')).join('\\,');
+  return { tex, nospace };
+}
+function siNum(n) {
+  n = String(n || '').trim(); if (!n) return '';
+  if (/\\pm|\+-/.test(n)) return n.split(/\\pm|\+-/).map(siNum).join('\\pm ');
+  const s = n.replace(/\s+/g, '');
+  const m = /^([+-]?)(\d*)(?:[.,](\d*))?(?:[eEdD]([+-]?\d+))?$/.exec(s);
+  if (!m || (!m[2] && !m[3] && !m[4])) {
+    return s.replace(/(\d)[xX](\d)/g, '$1\\times $2').replace(/\*/g, '\\times ');
+  }
+  const grp = (d, fromLeft) => {
+    if (d.length < 5) return d;
+    if (fromLeft) return d.replace(/(\d{3})(?=\d)/g, '$1\\,');
+    return d.replace(/\B(?=(\d{3})+(?!\d))/g, '\\,');
+  };
+  let out = m[1] === '-' ? '-' : (m[1] === '+' ? '+' : '');
+  let mant = '';
+  if (m[2] || m[3] !== undefined) {
+    mant = grp(m[2] || '0', false);
+    if (m[3] !== undefined && m[3] !== '') mant += '.' + grp(m[3], true);
+  }
+  if (m[4] !== undefined) {
+    const e = String(parseInt(m[4], 10));
+    out += (mant ? mant + '\\times ' : '') + '10^{' + e + '}';
+  } else out += mant;
+  return out;
+}
+function siExpand(s) {
+  const re = /\\(SIrange|SIlist|SI|si|qtyrange|qtylist|qtyproduct|qty|unit|numrange|numlist|numproduct|num|ang|tablenum)(?![a-zA-Z])/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(s))) {
+    // skip if escaped backslash
+    let k = m.index - 1, bs = 0; while (k >= 0 && s[k] === '\\') { bs++; k--; }
+    if (bs % 2) continue;
+    const cmd = m[1]; let i = re.lastIndex;
+    const o = readOpt(s, i); if (o) i = o[1];
+    const need = { SIrange: 3, SIlist: 2, SI: 2, si: 1, qtyrange: 3, qtylist: 2, qtyproduct: 2, qty: 2, unit: 1, numrange: 2, numlist: 1, numproduct: 1, num: 1, ang: 1, tablenum: 1 }[cmd];
+    const args = []; let j = i; let ok = true;
+    for (let a = 0; a < need; a++) {
+      if (cmd === 'SI' && a === 1) { const o2 = readOpt(s, j); if (o2) j = o2[1]; }
+      const js = skipSp(s, j);
+      if (s[js] !== '{') { ok = false; break; }
+      const r = readArg(s, j); args.push(r[0]); j = r[1];
+    }
+    if (!ok) continue; // e.g. physics \qty(...)
+    let tex;
+    const U = (u) => siUnit(u);
+    const q = (num, u) => { const uu = U(u); let nn = siNum(num); if (uu.tex && /\\pm/.test(nn)) nn = '(' + nn + ')'; return nn + (uu.tex ? (uu.nospace ? '' : '\\,') + uu.tex : ''); };
+    switch (cmd) {
+      case 'SI': case 'qty': tex = q(args[0], args[1]); break;
+      case 'si': case 'unit': tex = U(args[0]).tex; break;
+      case 'num': case 'tablenum': tex = siNum(args[0]); break;
+      case 'SIrange': case 'qtyrange': tex = q(args[0], args[2]) + '\\text{ to }' + q(args[1], args[2]); break;
+      case 'numrange': tex = siNum(args[0]) + '\\text{ to }' + siNum(args[1]); break;
+      case 'SIlist': case 'qtylist': case 'numlist': {
+        const nums = args[0].split(';').map(x => x.trim());
+        const parts = nums.map(x => cmd === 'numlist' ? siNum(x) : q(x, args[1]));
+        tex = parts.length <= 1 ? parts.join('') : parts.slice(0, -1).join(',\\ ') + '\\text{ and }' + parts[parts.length - 1];
+        break;
+      }
+      case 'qtyproduct': case 'numproduct': {
+        const nums = args[0].split(/x/).map(x => x.trim());
+        tex = nums.map(x => cmd === 'numproduct' ? siNum(x) : q(x, args[1])).join('\\times ');
+        break;
+      }
+      case 'ang': {
+        const p = args[0].split(';');
+        tex = ''; const marks = ['^{\\circ}', '^{\\prime}', '^{\\prime\\prime}'];
+        p.forEach((x, k) => { if (x.trim()) tex += siNum(x) + marks[k]; });
+        break;
+      }
+    }
+    out += s.slice(last, m.index) + '\\ensuremath{' + tex + '}';
+    last = j; re.lastIndex = j;
+  }
+  return out + s.slice(last);
+}
+
+/* ---------------- definitions & macro expansion ---------------- */
+const SETTING_NAMES = new Set(['arraystretch', 'baselinestretch', 'labelenumi', 'labelenumii', 'labelenumiii', 'labelenumiv',
+  'labelitemi', 'labelitemii', 'labelitemiii', 'labelitemiv', 'theenumi', 'theenumii', 'theenumiii', 'theenumiv', 'figurename',
+  'tablename', 'contentsname', 'abstractname', 'refname', 'familydefault', 'thefootnote', 'questionlabel', 'partlabel',
+  'subpartlabel', 'subsubpartlabel', 'choicelabel', 'solutiontitle', 'thequestion', 'thepartno', 'thesubpart', 'thechoice',
+  'proofname', 'appendixname', 'listfigurename', 'listtablename', 'bibname', 'today', 'thesection', 'thesubsection', 'tabcolsep', 'arraycolsep']);
+
+function extractDefs(s, D, warn) {
+  const re = /\\(newcommand|renewcommand|providecommand|DeclareRobustCommand|DeclareMathOperator|NewDocumentCommand|RenewDocumentCommand|ProvideDocumentCommand|DeclareDocumentCommand|newenvironment|renewenvironment|newtheorem|definecolor|colorlet|gdef|edef|xdef|def|let)(?![a-zA-Z])(\*?)/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(s))) {
+    let k = m.index - 1, bs = 0; while (k >= 0 && s[k] === '\\') { bs++; k--; }
+    if (bs % 2) continue;
+    const cmd = m[1], star = m[2] === '*'; let i = re.lastIndex;
+    let ok = true;
+    const nameArg = () => { const r = readArg(s, i); if (!r) { ok = false; return ''; } i = r[1]; return r[0].trim().replace(/^\\/, ''); };
+    try {
+      if (/^(newcommand|renewcommand|providecommand|DeclareRobustCommand)$/.test(cmd)) {
+        const name = nameArg();
+        let n = 0, def; const o1 = readOpt(s, i); if (o1) { n = parseInt(o1[0], 10) || 0; i = o1[1]; const o2 = readOpt(s, i); if (o2) { def = o2[0]; i = o2[1]; } }
+        const b = readArg(s, i); if (!b) ok = false; else {
+          i = b[1];
+          if (SETTING_NAMES.has(name)) D.settings[name] = b[0];
+          else if (!(cmd === 'providecommand' && D.macros.has(name))) {
+            const params = []; for (let a = 0; a < n; a++) params.push(a === 0 && def !== undefined ? { t: 'o', d: def } : { t: 'm' });
+            D.macros.set(name, { params, body: b[0] });
+          }
+        }
+      } else if (/DocumentCommand$/.test(cmd)) {
+        const name = nameArg(); const spec = readArg(s, i); i = spec[1]; const b = readArg(s, i); i = b[1];
+        const params = []; const sp = spec[0]; let p = 0;
+        while (p < sp.length) {
+          const ch = sp[p];
+          if (ch === 'm') { params.push({ t: 'm' }); p++; }
+          else if (ch === 'o') { params.push({ t: 'o', d: '' }); p++; }
+          else if (ch === 'O') { const r = readArg(sp, p + 1); params.push({ t: 'o', d: r ? r[0] : '' }); p = r ? r[1] : p + 1; }
+          else if (ch === 's') { params.push({ t: 's' }); p++; }
+          else p++;
+        }
+        D.macros.set(name, { params, body: b[0] });
+      } else if (cmd === 'DeclareMathOperator') {
+        const name = nameArg(); const b = readArg(s, i); i = b[1];
+        D.macros.set(name, { params: [], body: '\\operatorname' + (star ? '*' : '') + '{' + b[0] + '}' });
+      } else if (cmd === 'newenvironment' || cmd === 'renewenvironment') {
+        const name = nameArg(); let n = 0, def;
+        const o1 = readOpt(s, i); if (o1) { n = parseInt(o1[0], 10) || 0; i = o1[1]; const o2 = readOpt(s, i); if (o2) { def = o2[0]; i = o2[1]; } }
+        const b1 = readArg(s, i); i = b1[1]; const b2 = readArg(s, i); i = b2[1];
+        const params = []; for (let a = 0; a < n; a++) params.push(a === 0 && def !== undefined ? { t: 'o', d: def } : { t: 'm' });
+        D.envs.set(name, { params, begin: b1[0], end: b2[0] });
+      } else if (cmd === 'newtheorem') {
+        const name = nameArg(); let shared = null; const o1 = readOpt(s, i); if (o1) { shared = o1[0]; i = o1[1]; }
+        const t = readArg(s, i); i = t[1]; const o2 = readOpt(s, i); if (o2) i = o2[1];
+        D.theorems.set(name, { title: t[0], numbered: !star, counter: shared || name });
+      } else if (cmd === 'definecolor') {
+        const name = nameArg(); const model = readArg(s, i); i = model[1]; const v = readArg(s, i); i = v[1];
+        const c = colorFromModel(model[0], v[0]); if (c) D.colors[name] = c;
+      } else if (cmd === 'colorlet') {
+        const name = nameArg(); const v = readArg(s, i); i = v[1];
+        const c = parseColor(v[0], D.colors); if (c) D.colors[name] = c;
+      } else if (cmd === 'let') {
+        const a = /^\s*\\([a-zA-Z@]+|.)\s*=?\s*\\([a-zA-Z@]+|.)/.exec(s.slice(i, i + 80));
+        if (a) { i += a[0].length; if (a[1] !== a[2] && !SETTING_NAMES.has(a[1])) D.macros.set(a[1], { params: [], body: '\\' + a[2] }); }
+        else ok = false;
+      } else { // def family
+        const a = /^\s*\\([a-zA-Z@]+)/.exec(s.slice(i, i + 80));
+        if (!a) ok = false; else {
+          i += a[0].length; const name = a[1];
+          const pm = /^((?:#\d)*)\s*\{/.exec(s.slice(i, i + 40));
+          if (!pm) { // delimited params: skip definition body
+            const bi = s.indexOf('{', i); const e = bi >= 0 ? matchBrace(s, bi) : -1;
+            if (e >= 0) i = e + 1; warn('\\def\\' + name + ' with special parameters', 'def');
+          } else {
+            const nParams = (pm[1].match(/#/g) || []).length; i += pm[1].length;
+            const b = readArg(s, i); i = b[1];
+            if (SETTING_NAMES.has(name)) D.settings[name] = b[0];
+            else D.macros.set(name, { params: Array.from({ length: nParams }, () => ({ t: 'm' })), body: b[0] });
+          }
+        }
+      }
+    } catch (e) { ok = false; }
+    if (!ok) continue;
+    out += s.slice(last, m.index); last = i; re.lastIndex = i;
+  }
+  return out + s.slice(last);
+}
+function expandMacros(s, M) {
+  if (!M.size) return s;
+  const re = /\\([a-zA-Z@]+)/g; let i = 0, total = 0; const per = new Map();
+  while (true) {
+    re.lastIndex = i; const m = re.exec(s); if (!m) break;
+    let k = m.index - 1, bs = 0; while (k >= 0 && s[k] === '\\') { bs++; k--; }
+    const name = m[1]; const d = M.get(name);
+    if (!d || bs % 2) { i = re.lastIndex; continue; }
+    let j = re.lastIndex; const args = []; let ok = true;
+    for (const p of d.params) {
+      if (p.t === 'o') { const r = readOpt(s, j); if (r) { args.push(r[0]); j = r[1]; } else args.push(p.d === undefined ? '' : p.d); }
+      else if (p.t === 's') { if (s[j] === '*') { args.push('\\BooleanTrue'); j++; } else args.push('\\BooleanFalse'); }
+      else { const r = readArg(s, j); if (!r) { ok = false; break; } args.push(r[0]); j = r[1]; }
+    }
+    if (!ok) { i = re.lastIndex; continue; }
+    let body = d.body.replace(/##|#([1-9])/g, (x, n) => n ? (args[n - 1] !== undefined ? args[n - 1] : '') : '#');
+    if (!d.params.length) { while (s[j] === ' ' || s[j] === '\t') j++; }
+    if (/\\[a-zA-Z@]+$/.test(body) && /[a-zA-Z@]/.test(s[j] || '')) body += ' ';
+    s = s.slice(0, m.index) + body + s.slice(j);
+    const c = (per.get(name) || 0) + 1; per.set(name, c); total++;
+    const selfRef = new RegExp('\\\\' + name + '(?![a-zA-Z])').test(body);
+    i = (selfRef || c > 3000) ? m.index + body.length : m.index;
+    if (total > 40000) break;
+  }
+  return s;
+}
+
+/* ---------------- misc tables ---------------- */
+const SYMBOLS = {
+  ldots: '\u2026', dots: '\u2026', textellipsis: '\u2026', S: '\u00a7', P: '\u00b6', dag: '\u2020', ddag: '\u2021', copyright: '\u00a9',
+  textcopyright: '\u00a9', textregistered: '\u00ae', texttrademark: '\u2122', pounds: '\u00a3', textsterling: '\u00a3', euro: '\u20ac',
+  texteuro: '\u20ac', textdegree: '\u00b0', degree: '\u00b0', textcelsius: '\u2103', textmu: '\u03bc', textohm: '\u2126', checkmark: '\u2713',
+  texttimes: '\u00d7', textdiv: '\u00f7', textpm: '\u00b1', textbullet: '\u2022', textperiodcentered: '\u00b7', textasciitilde: '~',
+  textasciicircum: '^', textbackslash: '\\', textbar: '|', textless: '<', textgreater: '>', textquotedbl: '"', textquoteleft: '\u2018',
+  textquoteright: '\u2019', textquotedblleft: '\u201c', textquotedblright: '\u201d', textendash: '\u2013', textemdash: '\u2014',
+  slash: '/', i: '\u0131', j: '\u0237', ae: '\u00e6', AE: '\u00c6', oe: '\u0153', OE: '\u0152', o: '\u00f8', O: '\u00d8', ss: '\u00df',
+  aa: '\u00e5', AA: '\u00c5', l: '\u0142', L: '\u0141', textunderscore: '_', textexclamdown: '\u00a1', textquestiondown: '\u00bf',
+  textsection: '\u00a7', textparagraph: '\u00b6', textonehalf: '\u00bd', textonequarter: '\u00bc', textthreequarters: '\u00be',
+  Square: '\u2610', XBox: '\u2612', CheckedBox: '\u2611', square: '\u25a1', blacksquare: '\u25a0', Box: '\u25a1', bigcirc: '\u25ef',
+  textopenbullet: '\u25e6', textrightarrow: '\u2192', textleftarrow: '\u2190', textdagger: '\u2020', textdaggerdbl: '\u2021',
+  guillemotleft: '\u00ab', guillemotright: '\u00bb', textvisiblespace: '\u2423', textnumero: '\u2116', textdollar: '$',
+  textbraceleft: '{', textbraceright: '}', textasteriskcentered: '*', qed: '\u220e', qedsymbol: '\u220e', smiley: '\u263a',
+  Checkmark: '\u2714', XSolidBrush: '\u2718', ballotx: '\u2717', textcircledP: '\u2117', ss: '\u00df', MVAt: '@', yen: '\u00a5'
+};
+const DING = { 51: '\u2713', 52: '\u2714', 55: '\u2717', 56: '\u2718', 72: '\u2605', 73: '\u2606', 108: '\u25cf', 109: '\u274d', 110: '\u25a0', 111: '\u274f', 113: '\u2751', 115: '\u25b2', 116: '\u25bc', 117: '\u25c6', 118: '\u2756', 168: '\u2663', 169: '\u2666', 170: '\u2665', 171: '\u2660', 220: '\u2794', 224: '\u27a0', 228: '\u27a4', 232: '\u27a8' };
+const ACCENTS = { "'": '\u0301', '`': '\u0300', '^': '\u0302', '"': '\u0308', '~': '\u0303', '=': '\u0304', '.': '\u0307', u: '\u0306', v: '\u030c', H: '\u030b', c: '\u0327', d: '\u0323', b: '\u0331', k: '\u0328', r: '\u030a', t: '\u0361' };
+const ENUMITEM_KEYS = new Set(['resume', 'resume*', 'nosep', 'noitemsep', 'nolistsep', 'wide', 'leftmargin', 'start', 'label', 'topsep', 'itemsep', 'parsep', 'partopsep', 'labelsep', 'labelwidth', 'align', 'before', 'after', 'font', 'ref', 'series', 'labelindent', 'itemindent', 'listparindent', 'rightmargin', 'widest', 'beginpenalty', 'style', 'shortlabels']);
+const SIZES = { tiny: 0.5, scriptsize: 0.7, footnotesize: 0.8, small: 0.9, normalsize: 1, large: 1.2, Large: 1.44, LARGE: 1.728, huge: 2.074, Huge: 2.488 };
+const SPACES = { quad: '1em', qquad: '2em', enspace: '0.5em', enskip: '0.5em', thinspace: '0.1667em', negthinspace: '-0.1667em', medspace: '0.2222em', thickspace: '0.2778em', hskip: '0.5em', space: '0.333em', nobreakspace: '0.333em' };
+// commands to discard: number of mandatory args (optional [..] args are skipped automatically)
+const IGNORE = {
+  protect: 0, relax: 0, null: 0, leavevmode: 0, nopagebreak: 0, allowbreak: 0, nolinebreak: 0, frenchspacing: 0, nonfrenchspacing: 0,
+  sloppy: 0, fussy: 0, raggedbottom: 0, flushbottom: 0, onehalfspacing: 0, doublespacing: 0, singlespacing: 0, selectfont: 0,
+  printanswers: 0, noprintanswers: 0, noaddpoints: 0, addpoints: 0, nopointsinmargin: 0, pointsinmargin: 0, pointsinrightmargin: 0,
+  pointsdroppedatright: 0, bracketedpoints: 0, boxedpoints: 0, nobracketedpoints: 0, unframedsolutions: 0, framedsolutions: 0,
+  FloatBarrier: 0, justifying: 0, hfil: 0, hss: 0, ignorespaces: 0, unskip: 0, strut: 0, indent: 0, mathversion: 1,
+  pagestyle: 1, thispagestyle: 1, pagenumbering: 1, hypersetup: 1, setmainfont: 1, setsansfont: 1, setmonofont: 1,
+  setCJKmainfont: 1, setCJKsansfont: 1, setCJKmonofont: 1, setCJKfamilyfont: 2, CJKfamily: 1, linespread: 1, usetikzlibrary: 1,
+  tikzset: 1, ctikzset: 1, pgfplotsset: 1, graphicspath: 1, captionsetup: 1, setlist: 1, sisetup: 1, geometry: 1, newgeometry: 1,
+  restoregeometry: 0, bibliographystyle: 1, nocite: 1, hyphenation: 1, enlargethispage: 1, addvspace: 1, settasks: 1, newcounter: 1,
+  stepcounter: 1, refstepcounter: 1, addtocounter: 2, setlength: 2, addtolength: 2, settowidth: 2, settoheight: 2, pointname: 1,
+  pointpoints: 2, bonuspointpoints: 2, marksnotpoints: 0, extraheadheight: 1, extrafootheight: 1, firstpageheadrule: 0,
+  runningheadrule: 0, firstpagefootrule: 0, runningfootrule: 0, header: 3, footer: 3, firstpageheader: 3, runningheader: 3,
+  firstpagefooter: 3, runningfooter: 3, cfoot: 1, lfoot: 1, rfoot: 1, chead: 1, lhead: 1, rhead: 1, fancyhead: 1, fancyfoot: 1,
+  fancyhf: 1, pagecolor: 1, index: 1, usepackage: 1, RequirePackage: 1, documentclass: 1, allowdisplaybreaks: 0, numberwithin: 2,
+  raggedcolumns: 0, ctexset: 1, xeCJKsetup: 1, lstset: 1, setminted: 1, renewcommand: 0, qformat: 1, pointformat: 1, CorrectChoiceEmphasis: 1,
+  SolutionEmphasis: 1, checkboxchar: 1, checkedchar: 1, choicelabel: 0, totalformat: 1, pointsinleftmargin: 0, nobreak: 0, goodbreak: 0,
+  penalty: 0, newline: 0, vfil: 0, hbadness: 0, vbadness: 0, columnbreak: 0, newcolumntype: 2, arrayrulecolor: 1, rowcolors: 3,
+  bibliography: 1, printbibliography: 0, addbibresource: 1, makeatletter: 0, makeatother: 0, phantomsection: 0, addcontentsline: 3,
+  markboth: 2, markright: 1, label_dummy: 0, includeonly: 1, listoffigures: 0, listoftables: 0, printindex: 0, makeindex: 0,
+  DeclareGraphicsExtensions: 1, ExplSyntaxOn: 0, ExplSyntaxOff: 0, xspace: 0, onlyifstandalone: 0, centerline: 0, ignorespacesafterend: 0
+};
+
+/* ---------------- the converter ---------------- */
+class Conv {
+  constructor(opts) {
+    this.o = opts || {};
+    this.katex = this.o.katex;
+    this.warnings = new Map();
+    this.labels = {}; this.labelKind = {}; this.foot = []; this.toc = []; this.bib = {}; this.bibN = 0;
+    this.cnt = { part: 0, chapter: 0, section: 0, subsection: 0, subsubsection: 0, paragraph: 0, equation: 0, figure: 0, table: 0, question: 0, points: 0 };
+    this.thmCnt = {};
+    this.lastRef = ''; this.lastKind = '';
+    this.tikz = []; this.verb = [];
+    this.appendix = false; this.resumeEnum = 0;
+    this.title = ''; this.author = ''; this.date = null;
+  }
+  warn(msg, key) { key = key || msg; const w = this.warnings.get(key); if (w) w.n++; else this.warnings.set(key, { msg, n: 1 }); }
+
+  /* ---------- entry ---------- */
+  convert(main, files) {
+    const verb = this.verb;
+    const getFile = (name) => {
+      const n = baseName(name.trim());
+      const cands = [n, n + '.tex', n.replace(/\.tex$/, '')];
+      for (const c of cands) if (files && files[c] != null) return files[c];
+      return null;
+    };
+    const prep = (txt, depth) => {
+      txt = String(txt).replace(/\r\n?/g, '\n');
+      txt = protectVerbatim(txt, verb);
+      txt = stripComments(txt);
+      if (depth > 8) return txt;
+      return txt.replace(/\\(input|include|subfile|import|subimport)\s*(\{[^}]*\})?\s*\{([^}]*)\}/g, (all, cmd, dir, name) => {
+        if ((cmd === 'input' || cmd === 'include' || cmd === 'subfile') && dir) return all;
+        const f = getFile(name);
+        if (f == null) { this.warn('Missing file for \\' + cmd + '{' + name + '}', 'input:' + name); return ''; }
+        let t = prep(f, depth + 1);
+        if (cmd === 'subfile') { const b = t.indexOf('\\begin{document}'); if (b >= 0) { const e = t.lastIndexOf('\\end{document}'); t = t.slice(b + 16, e >= 0 ? e : t.length); } }
+        return (cmd === 'include' ? '\\clearpage\n' : '') + t + (cmd === 'include' ? '\n\\clearpage\n' : '');
+      });
+    };
+    let src = prep(main, 0);
+    let pre = '', body = src;
+    const b = src.indexOf('\\begin{document}');
+    if (b >= 0) { pre = src.slice(0, b); const e = src.indexOf('\\end{document}', b); body = src.slice(b + 16, e >= 0 ? e : src.length); }
+    // definitions
+    const D = { macros: new Map(), envs: new Map(), theorems: new Map(), colors: {}, settings: {} };
+    const warn = (m, k) => this.warn(m, k);
+    pre = extractDefs(pre, D, warn);
+    body = extractDefs(body, D, warn);
+    this.D = D;
+    this.P = this.parsePreamble(pre);
+    // expansion
+    body = expandMacros(body, D.macros);
+    body = siExpand(body);
+    if (this.title) this.title = siExpand(expandMacros(this.title, D.macros));
+    if (this.author) this.author = siExpand(expandMacros(this.author, D.macros));
+    if (this.date) this.date = siExpand(expandMacros(this.date, D.macros));
+    // KaTeX macros
+    this.kmacros = Object.assign({
+      '\\ensuremath': '#1', '\\degree': '^{\\circ}', '\\celsius': '^{\\circ}\\mathrm{C}', '\\textdegree': '^{\\circ}',
+      '\\dv': '\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}', '\\pdv': '\\frac{\\partial #1}{\\partial #2}', '\\abs': '\\left|#1\\right|',
+      '\\norm': '\\left\\|#1\\right\\|', '\\vb': '\\mathbf{#1}', '\\vu': '\\hat{\\mathbf{#1}}', '\\dd': '\\mathrm{d}', '\\qty': '',
+      '\\mathds': '\\mathbb{#1}', '\\upmu': '\\mu', '\\upOmega': '\\Omega', '\\diff': '\\mathrm{d}', '\\eval': '\\left.#1\\right|',
+      '\\BooleanTrue': '', '\\BooleanFalse': '', '\\unit': '\\mathrm{#1}', '\\si': '\\mathrm{#1}',
+      '\\intertext': '\\text{#1}', '\\shortintertext': '\\text{#1}', '\\label': '', '\\nonumber': '', '\\notag': '',
+      '\\tcboxmath': '\\boxed{#1}', '\\Ohm': '\\Omega', '\\micro': '\\mu', '\\ohm': '\\Omega', '\\fullstop': '.',
+      '\\textup': '\\textrm{#1}', '\\textsl': '\\textit{#1}', '\\mbox': '\\text{#1}', '\\hbox': '\\text{#1}', '\\displaylimits': '',
+      '\\overarc': '\\overgroup{#1}', '\\arc': '\\overgroup{#1}', '\\parallelsum': '\\parallel', '\\E': '\\mathrm{e}'
+    }, {});
+    for (const k of Object.keys(D.colors)) { /* colours handled by KaTeX \color with css string */ }
+    // render
+    const ctx = { style: {}, top: true, enumDepth: 0, itemDepth: 0, listDepth: 0 };
+    let html = this.block(body, ctx, true);
+    // footnotes
+    if (this.foot.length) {
+      html += '<div class="fns"><hr>' + this.foot.map((f, k) => `<div class="fn"><sup>${f.mark}</sup> ${f.html}</div>`).join('') + '</div>';
+    }
+    // toc & refs
+    html = html.replace(/\u0006TOC\u0006/g, () => this.tocHtml());
+    html = html.replace(/\u0006(ref|eqref|cite|nameref|autoref|pageref|numq|nump):([^\u0006]*)\u0006/g, (all, kind, key) => this.resolveRef(kind, key));
+    // remove any stray markers
+    html = html.replace(/[\u0001-\u0007]/g, '');
+    return { html, P: this.P, tikz: this.tikz, warnings: [...this.warnings.values()], title: this.title };
+  }
+
+  resolveRef(kind, key) {
+    if (kind === 'numq') return String(this.cnt.question);
+    if (kind === 'nump') return String(this.cnt.points);
+    if (kind === 'cite') {
+      return '[' + key.split(',').map(k => { k = k.trim(); if (this.bib[k] == null) { this.warn('Citation not found: ' + k, 'cite:' + k); return '?'; } return this.bib[k]; }).join(', ') + ']';
+    }
+    if (kind === 'pageref') return '?';
+    const v = this.labels[key];
+    if (v == null) { this.warn('Reference to unknown label: ' + key, 'ref:' + key); return '??'; }
+    if (kind === 'eqref') return '(' + v + ')';
+    if (kind === 'autoref') {
+      const k = this.labelKind[key];
+      const name = { figure: this.name('figurename'), table: this.name('tablename'), equation: 'Equation', section: 'Section' }[k] || '';
+      return (name ? name + '\u00a0' : '') + (k === 'equation' ? '(' + v + ')' : v);
+    }
+    return v;
+  }
+  name(n) {
+    const dflt = this.P && this.P.ctex ?
+      { figurename: '\u5716', tablename: '\u8868', contentsname: '\u76ee\u9304', abstractname: '\u6458\u8981', refname: '\u53c3\u8003\u6587\u737b', proofname: '\u8b49\u660e', solutiontitle: 'Solution:' } :
+      { figurename: 'Figure', tablename: 'Table', contentsname: 'Contents', abstractname: 'Abstract', refname: 'References', proofname: 'Proof', solutiontitle: 'Solution:' };
+    if (this.D.settings[n] != null) return this.inlineFinal(this.D.settings[n], { style: {} }).replace(/<[^>]+>/g, '');
+    return dflt[n] || '';
+  }
+  tocHtml() {
+    if (!this.toc.length) return '';
+    return BS + 'b<div class="toc"><h2 class="sec nonum">' + esc(this.name('contentsname')) + '</h2>' +
+      this.toc.map(t => `<div class="tocl l${t.level}"><span class="tn">${t.num}</span>${t.html}</div>`).join('') + '</div>' + BE;
+  }
+
+  /* ---------- preamble ---------- */
+  parsePreamble(pre) {
+    const P = { cls: 'article', clsOpts: [], pkgs: new Map(), fontPt: 10, paper: 'a4', landscape: false, margins: {}, tikzLibs: new Set(),
+      tikzPre: [], answers: false, parindent: null, parskip: null, pagestyle: 'plain', secnumdepth: 3, family: 'serif', cjk: false,
+      linespread: 1, pointsRight: false, pointname: null };
+    const dc = /\\documentclass\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}/.exec(pre);
+    if (dc) { P.cls = dc[2].trim(); P.clsOpts = (dc[1] || '').split(',').map(x => x.trim()).filter(Boolean); }
+    for (const o of P.clsOpts) {
+      const m = /^(\d+)pt$/.exec(o); if (m) P.fontPt = +m[1];
+      if (/^(a4|a3|a5|b5|letter|legal)paper$/.test(o)) P.paper = o.replace('paper', '');
+      if (o === 'landscape') P.landscape = true;
+      if (o === 'answers') P.answers = true;
+    }
+    const re = /\\(?:usepackage|RequirePackage)\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}/g; let m;
+    while ((m = re.exec(pre))) for (const p of m[2].split(',')) P.pkgs.set(p.trim(), m[1] || '');
+    if (/^ctex/.test(P.cls) || P.pkgs.has('ctex') || P.pkgs.has('xeCJK') || P.pkgs.has('CJKutf8') || P.pkgs.has('CJK')) P.cjk = true;
+    if (/^ctex/.test(P.cls) || P.pkgs.has('ctex')) P.ctex = true;
+    if (/^(ctex)?art/.test(P.cls) === false && !/article|exam|report|book|ctex|amsart|scrartcl|scrreprt|scrbook|memoir|standalone|letter|minimal|extarticle|extreport/.test(P.cls)) this.warn('Document class "' + P.cls + '" is shown like an article', 'cls');
+    const ext = /^ext/.test(P.cls) ? 1 : 0; if (ext) { /* extarticle allows 8..20pt */ }
+    // geometry
+    const geo = [];
+    if (P.pkgs.has('geometry')) geo.push(P.pkgs.get('geometry'));
+    pre.replace(/\\geometry\s*\{([^}]*)\}/g, (a, g) => { geo.push(g); return a; });
+    for (const g of geo) {
+      const kv = parseKV(g);
+      for (const [k, v] of kv) {
+        if (/^(a4|a3|a5|b5|letter|legal)paper$/.test(k)) P.paper = k.replace('paper', '');
+        else if (k === 'landscape') P.landscape = true;
+        else if (k === 'margin') P.margins = { t: cssLen(v), b: cssLen(v), l: cssLen(v), r: cssLen(v) };
+        else if (k === 'hmargin' || k === 'vmargin') {
+          const pr = String(v).split(','); const a = cssLen(pr[0]), bb = cssLen(pr[1] || pr[0]);
+          if (k === 'hmargin') { P.margins.l = a; P.margins.r = bb; } else { P.margins.t = a; P.margins.b = bb; }
+        }
+        else if (/^(left|lmargin|inner)$/.test(k)) P.margins.l = cssLen(v);
+        else if (/^(right|rmargin|outer)$/.test(k)) P.margins.r = cssLen(v);
+        else if (/^(top|tmargin)$/.test(k)) P.margins.t = cssLen(v);
+        else if (/^(bottom|bmargin)$/.test(k)) P.margins.b = cssLen(v);
+        else if (k === 'scale') { const f = parseFloat(v); if (f > 0 && f < 1) { const mm = ((1 - f) / 2 * 100).toFixed(1) + '%'; P.margins = { t: (1 - f) / 2 * 29.7 + 'cm', b: (1 - f) / 2 * 29.7 + 'cm', l: (1 - f) / 2 * 21 + 'cm', r: (1 - f) / 2 * 21 + 'cm' }; } }
+        else if (k === 'textwidth' || k === 'width') P.textwidth = cssLen(v);
+      }
+    }
+    if (P.pkgs.has('fullpage')) P.margins = { t: '2.54cm', b: '2.54cm', l: '2.54cm', r: '2.54cm' };
+    if (P.pkgs.has('parskip')) { P.parindent = '0pt'; P.parskip = '0.6em'; }
+    if (P.ctex) P.parindent = '2em';
+    pre.replace(/\\setlength\s*\{?\\(parindent|parskip)\}?\s*\{([^}]*)\}/g, (a, n, v) => { P[n] = cssLen(v) || '0pt'; return a; });
+    pre.replace(/\\(parindent|parskip)\s*=?\s*([\d.]+\s*[a-z]{2})/g, (a, n, v) => { P[n] = cssLen(v); return a; });
+    pre.replace(/\\setcounter\s*\{secnumdepth\}\s*\{(-?\d+)\}/g, (a, v) => { P.secnumdepth = +v; return a; });
+    pre.replace(/\\linespread\s*\{([\d.]+)\}/g, (a, v) => { P.linespread = +v; return a; });
+    pre.replace(/\\pagestyle\s*\{(\w+)\}/g, (a, v) => { P.pagestyle = v; return a; });
+    if (/\\printanswers\b/.test(pre)) P.answers = true;
+    if (/\\noprintanswers\b/.test(pre)) P.answers = false;
+    if (/\\pointsinrightmargin|\\pointsdroppedatright/.test(pre)) P.pointsRight = true;
+    pre.replace(/\\pointname\s*\{([^}]*)\}/g, (a, v) => { P.pointname = v; return a; });
+    pre.replace(/\\pointpoints\s*\{([^}]*)\}\s*\{([^}]*)\}/g, (a, s1, s2) => { P.pointpoints = [s1, s2]; return a; });
+    pre.replace(/\\usetikzlibrary\s*\{([^}]*)\}/g, (a, v) => { v.split(',').map(x => x.trim()).filter(Boolean).forEach(x => P.tikzLibs.add(x)); return a; });
+    // tikz preamble bits (tikzset / ctikzset / colours)
+    const grab = (name) => { const r = new RegExp('\\\\' + name + '\\s*\\{', 'g'); let mm; while ((mm = r.exec(pre))) { const e = matchBrace(pre, mm.index + mm[0].length - 1); if (e > 0) P.tikzPre.push(pre.slice(mm.index, e + 1)); } };
+    grab('tikzset'); grab('ctikzset'); grab('pgfplotsset');
+    for (const k of Object.keys(this.D.colors)) { const c = this.D.colors[k]; P.tikzPre.push(`\\definecolor{${k}}{RGB}{${c.join(',')}}`); }
+    if (this.D.settings.familydefault && /sfdefault/.test(this.D.settings.familydefault)) P.family = 'sans';
+    if (['mathptmx', 'times', 'newtxtext', 'txfonts', 'tgtermes', 'ptm', 'termes'].some(p => P.pkgs.has(p))) P.family = 'times';
+    if (['helvet', 'arev', 'cmbright', 'sfmath', 'tgheros'].some(p => P.pkgs.has(p)) && P.family !== 'times') { if (P.pkgs.has('helvet') && !/sfdefault/.test(this.D.settings.familydefault || '')) { } else P.family = 'sans'; }
+    // title / author / date
+    const t = /\\title\s*(?:\[[^\]]*\])?\s*\{/.exec(pre); if (t) { const e = matchBrace(pre, t.index + t[0].length - 1); this.title = pre.slice(t.index + t[0].length, e); }
+    const au = /\\author\s*(?:\[[^\]]*\])?\s*\{/.exec(pre); if (au) { const e = matchBrace(pre, au.index + au[0].length - 1); this.author = pre.slice(au.index + au[0].length, e); }
+    const dt = /\\date\s*\{/.exec(pre); if (dt) { const e = matchBrace(pre, dt.index + dt[0].length - 1); this.date = pre.slice(dt.index + dt[0].length, e); }
+    if (P.pkgs.has('circuitikz')) P.circuitikz = P.pkgs.get('circuitikz');
+    if (P.cls === 'exam') { P.exam = true; }
+    if (/fancyhdr/.test([...P.pkgs.keys()].join(',')) || (P.exam && /\\(first|running)?(page)?(header|footer)\b/.test(pre))) this.warn('Headers and footers (fancyhdr / exam) are not shown; only page numbers are printed', 'hdr');
+    return P;
+  }
+
+  /* ---------- style helpers ---------- */
+  sty(html, st) {
+    if (!html) return '';
+    const cls = [], css = [];
+    if (st.b) cls.push('b'); if (st.i) cls.push('i'); if (st.sl) cls.push('i');
+    if (st.fam) cls.push(st.fam); if (st.sc) cls.push('sc');
+    if (st.size && st.size !== 1) css.push(`font-size:calc(var(--fs)*${st.size})`);
+    if (st.color) css.push('color:' + st.color);
+    if (!cls.length && !css.length) return html;
+    return `<span${cls.length ? ' class="' + cls.join(' ') + '"' : ''}${css.length ? ' style="' + css.join(';') + '"' : ''}>${html}</span>`;
+  }
+  withStyle(ctx, add) { return Object.assign({}, ctx, { style: Object.assign({}, ctx.style, add) }); }
+  textOut(t, ctx) {
+    t = t.replace(/[ \t\r\n]+/g, ' ');
+    t = t.replace(/---/g, '\u2014').replace(/--/g, '\u2013').replace(/``/g, '\u201c').replace(/''/g, '\u201d')
+      .replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/!\u2018/g, '\u00a1').replace(/\?\u2018/g, '\u00bf')
+      .replace(/<</g, '\u00ab').replace(/>>/g, '\u00bb');
+    if (ctx.style.fam === 'tt') t = t.replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'");
+    let h = esc(t);
+    h = h.replace(new RegExp(PH0 + '(\\d+)' + PH1, 'g'), (a, k) => this.verbHtml(+k));
+    return this.sty(h, ctx.style);
+  }
+  verbHtml(k) {
+    const v = this.verb[k]; if (!v) return '';
+    if (v.block) return BS + 'b<pre class="verb">' + esc(v.text) + '</pre>' + BE;
+    return '<code class="tt">' + esc(v.text) + '</code>';
+  }
+  inlineFinal(s, ctx) {
+    let h = this.inl(s, ctx);
+    h = h.replace(/\u0002[a-z]([\s\S]*?)\u0003/g, '$1').replace(/\u0001/g, ' ').replace(/[\u0004]/g, '').replace(/\u0007./g, '');
+    h = h.replace(/\u0005(.)/g, (a, t) => t === 'f' ? '<span class="hf-s"></span>' : '<span class="hf-' + t + '"></span>');
+    return h;
+  }
+
+  /* ---------- math ---------- */
+  renderMath(tex, display) {
+    const K = this.katex;
+    if (!K) return '<code>' + esc(tex) + '</code>';
+    const opt = { displayMode: display, throwOnError: true, strict: 'ignore', macros: this.kmacros, trust: false, output: 'html' };
+    // colours defined by \definecolor
+    tex = tex.replace(/\\(color|textcolor|colorbox)\s*\{([^}]*)\}/g, (a, c, name) => {
+      const col = parseColor(name, this.D.colors); return col ? `\\${c}{${'#' + col.map(v => v.toString(16).padStart(2, '0')).join('')}}` : a;
+    });
+    try { return K.renderToString(tex, opt); }
+    catch (e) {
+      this.warn('Maths problem: ' + String(e.message || e).replace(/^KaTeX parse error: /, '').slice(0, 140), 'math:' + String(e.message).slice(0, 60));
+      opt.throwOnError = false;
+      try { return K.renderToString(tex, opt); } catch (e2) { return '<code class="err">' + esc(tex) + '</code>'; }
+    }
+  }
+  splitRows(body) { return splitTop(body, (s, i) => (s[i] === '\\' && s[i + 1] === '\\') ? 2 : 0).map(p => p.text); }
+  displayEnv(env, body) {
+    // returns block html for a display maths environment
+    const star = /\*$/.test(env); let base = env.replace(/\*$/, '');
+    const labelsIn = (t) => { const ks = []; t = t.replace(/\\label\s*\{([^}]*)\}/g, (a, k) => { ks.push(k); return ''; }); return [t, ks]; };
+    const setLabel = (ks, v) => ks.forEach(k => { this.labels[k] = v; this.labelKind[k] = 'equation'; });
+    let tex;
+    const numbered = !star && /^(equation|align|gather|multline|flalign|alignat|eqnarray|xalignat)$/.test(base);
+    if (base === 'equation' || base === 'multline' || base === 'displaymath' || base === 'math') {
+      let [t, ks] = labelsIn(body);
+      let tag = '';
+      if (numbered) {
+        if (/\\tag\*?\s*\{/.test(t)) { }
+        else if (/\\(nonumber|notag)\b/.test(t)) t = t.replace(/\\(nonumber|notag)\b/g, '');
+        else { const n = this.eqNum(); tag = `\\tag{${n}}`; setLabel(ks, n); }
+      }
+      if (base === 'multline') tex = `\\begin{gather*}${t}${tag}\\end{gather*}`;
+      else tex = t + tag;
+    } else if (base === 'eqnarray') {
+      const rows = this.splitRows(body).filter(r => r.trim());
+      const conv = rows.map(r => {
+        let [t, ks] = labelsIn(r);
+        const cells = splitTop(t, (s, i) => s[i] === '&' ? 1 : 0).map(c => c.text);
+        let line = cells.length >= 3 ? cells[0] + ' &' + cells[1] + ' ' + cells.slice(2).join(' ') : cells.join(' & ');
+        if (numbered) {
+          if (/\\(nonumber|notag)\b/.test(line)) line = line.replace(/\\(nonumber|notag)\b/g, '');
+          else if (!/\\tag/.test(line)) { const n = this.eqNum(); line += `\\tag{${n}}`; setLabel(ks, n); }
+        }
+        return line;
+      });
+      tex = `\\begin{align*}${conv.join('\\\\')}\\end{align*}`;
+    } else {
+      // align, gather, flalign, alignat (one row per line)
+      let extra = '';
+      if (base === 'alignat' || base === 'xalignat') { const r = readArg(body, 0); if (r) { extra = '{' + r[0] + '}'; body = body.slice(r[1]); } base = 'alignat'; }
+      if (base === 'flalign') base = 'align';
+      const rows = this.splitRows(body);
+      if (rows.length > 1 && !rows[rows.length - 1].trim()) rows.pop();
+      const conv = rows.map(r => {
+        let [t, ks] = labelsIn(r);
+        if (numbered) {
+          if (/\\(nonumber|notag)\b/.test(t)) t = t.replace(/\\(nonumber|notag)\b/g, '');
+          else if (!/\\tag/.test(t)) { const n = this.eqNum(); t += `\\tag{${n}}`; setLabel(ks, n); }
+        }
+        return t;
+      });
+      tex = `\\begin{${base}*}${extra}${conv.join('\\\\')}\\end{${base}*}`;
+    }
+    return BS + 'm<div class="dm">' + this.renderMath(tex, true) + '</div>' + BE;
+  }
+  eqNum() { this.cnt.equation++; const n = (this.P.eqBySection && this.cnt.section) ? this.cnt.section + '.' + this.cnt.equation : String(this.cnt.equation); this.lastRef = n; return n; }
+
+  /* ---------- paragraphs ---------- */
+  block(s, ctx, top) { return this.paras(this.inl(s, ctx), !!top); }
+  paras(str, top) {
+    let html = '', cur = '', indentNext = top, curIndent = top, afterHead = false, noi = false, align = null;
+    const flush = () => {
+      const vis = cur.replace(/<br>/g, '').replace(/\s|&nbsp;|\u00a0/g, '');
+      if (vis) {
+        let cls = 'p';
+        if (curIndent && !noi && !afterHead) cls += ' ind';
+        if (align) cls += ' al-' + align;
+        let body = cur.replace(/^(\s|<br>)+/, '').replace(/(\s|<br>)+$/, '');
+        body = this.hfill(body);
+        html += `<div class="${cls}">${body}</div>`;
+        afterHead = false;
+      }
+      cur = ''; noi = false; curIndent = indentNext; indentNext = false;
+    };
+    const toks = str.split(/(\u0001|\u0002[a-z][\s\S]*?\u0003|\u0004|\u0007.)/);
+    for (const t of toks) {
+      if (!t) continue;
+      const c = t[0];
+      if (c === PAR) { flush(); curIndent = true; continue; }
+      if (c === NOI) { noi = true; continue; }
+      if (c === AL) { align = t[1] === 'n' ? null : t[1]; continue; }
+      if (c === BS) {
+        const kind = t[1]; const inner = t.slice(2, -1);
+        flush(); curIndent = false;
+        if (kind === 's' && !inner) { continue; }
+        html += (align && kind !== 'h' ? `<div class="al-${align}">${inner}</div>` : inner);
+        if (kind === 'h') afterHead = true;
+        continue;
+      }
+      cur += t;
+    }
+    flush();
+    return html;
+  }
+  hfill(h) {
+    if (h.indexOf(HF) < 0) return h;
+    // split into lines at top-level <br>
+    const lines = []; let depth = 0, last = 0;
+    const re = /<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g; let m;
+    const VOID = /^(br|img|hr|input|wbr|col|meta|link|path|line|rect|circle|use)$/i;
+    while ((m = re.exec(h))) {
+      if (m[1]) depth--; else if (!m[4] && !VOID.test(m[2])) depth++;
+      else if (m[2].toLowerCase() === 'br' && depth === 0) { lines.push(h.slice(last, m.index)); last = re.lastIndex; }
+    }
+    lines.push(h.slice(last));
+    const out = lines.map(line => {
+      if (line.indexOf(HF) < 0) return { row: false, html: line };
+      // split at top-level HF markers
+      const segs = []; let d = 0, st = 0; const types = [];
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '<') { const e = line.indexOf('>', i); const tag = line.slice(i, e + 1); if (/^<\//.test(tag)) d--; else if (!/\/>$/.test(tag) && !/^<(br|img|hr|input|wbr|col|path|line|rect|circle|use)\b/i.test(tag)) d++; i = e; continue; }
+        if (c === HF && d === 0) { segs.push(line.slice(st, i)); types.push(line[i + 1]); st = i + 2; i++; }
+      }
+      segs.push(line.slice(st));
+      if (types.length === 0) return { row: false, html: line.replace(/\u0005(.)/g, '<span class="hf-s"></span>') };
+      if (types.length === 1 && types[0] === 'f' && segs[1].replace(/<[^>]*>|\s/g, '')) {
+        // single \hfill: float the rest of the line to the right (like LaTeX at a line end)
+        return { row: false, html: segs[0].replace(/\s+$/, '') + `<span class="hfr">${segs[1].replace(/\u0005(.)/g, '<span class="hf-s"></span>').replace(/^\s+/, '')}</span>` };
+      }
+      let r = '<span class="hrow">';
+      segs.forEach((sg, k) => {
+        sg = sg.replace(/\u0005(.)/g, '<span class="hf-s"></span>');
+        if (sg.replace(/\s/g, '')) r += `<span class="seg">${sg}</span>`;
+        if (k < types.length) r += `<span class="fill f-${types[k]}"></span>`;
+      });
+      return { row: true, html: r + '</span>' };
+    });
+    let res = '';
+    out.forEach((l, k) => { res += l.html; if (k < out.length - 1 && !l.row && !out[k + 1].row) res += '<br>'; });
+    return res;
+  }
+
+  /* ---------- inline parser ---------- */
+  inl(s, ctx) {
+    let out = '', txt = '', i = 0; const n = s.length;
+    const flush = () => { if (txt) { out += this.textOut(txt, ctx); txt = ''; } };
+    while (i < n) {
+      const c = s[i];
+      if (c === '\\') {
+        flush();
+        const r = this.command(s, i, ctx);
+        if (r.ctx) ctx = r.ctx;
+        out += r.html || ''; i = r.i;
+        continue;
+      }
+      if (c === '{') {
+        flush(); const e = matchBrace(s, i);
+        const inner = e < 0 ? s.slice(i + 1) : s.slice(i + 1, e);
+        out += this.inl(inner, ctx); i = e < 0 ? n : e + 1; continue;
+      }
+      if (c === '}') { i++; continue; }
+      if (c === '$') {
+        flush();
+        if (s[i + 1] === '$') {
+          const e = s.indexOf('$$', i + 2); const tex = s.slice(i + 2, e < 0 ? n : e);
+          out += BS + 'm<div class="dm">' + this.renderMath(tex.replace(/\\label\s*\{[^}]*\}/g, ''), true) + '</div>' + BE;
+          i = e < 0 ? n : e + 2; continue;
+        }
+        let j = i + 1; while (j < n && !(s[j] === '$' && s[j - 1] !== '\\')) { if (s[j] === '\\') j++; j++; }
+        const tex = s.slice(i + 1, j);
+        const g = this.glue(this.sty(this.renderMath(tex, false), ctx.style), s, j + 1, ctx);
+        out += g[0]; i = g[1]; continue;
+      }
+      if (c === '\n') {
+        let j = i + 1, blank = false;
+        while (j < n && (s[j] === ' ' || s[j] === '\t' || s[j] === '\n' || s[j] === '\r')) { if (s[j] === '\n') blank = true; j++; }
+        if (blank) { flush(); out += PAR; i = j; continue; }
+        txt += ' '; i++; continue;
+      }
+      if (c === '~') { txt += '\u00a0'; i++; continue; }
+      if (c === '&') { txt += ' '; i++; continue; }
+      if (c === '#') { i++; continue; }
+      if (c === '^' || c === '_') {
+        // stray in text: treat as superscript/subscript like TeX would complain; render math-ish
+        flush(); const r = readArg(s, i + 1);
+        if (r) { out += `<${c === '^' ? 'sup' : 'sub'}>${this.inlineFinal(r[0], ctx)}</${c === '^' ? 'sup' : 'sub'}>`; i = r[1]; continue; }
+      }
+      if (c === PAR || c === NOI) { flush(); out += c; i++; continue; }
+      txt += c; i++;
+    }
+    flush();
+    return out;
+  }
+  glue(html, s, j, ctx) {
+    // keep punctuation that directly follows inline maths on the same line
+    const m = /^[.,;:!?)\]\u3002\uff0c\u3001\uff1b\uff1a\uff09]+/.exec(s.slice(j, j + 6));
+    if (!m) return [html, j];
+    return ['<span class="nobr">' + html + this.textOut(m[0], ctx) + '</span>', j + m[0].length];
+  }
+  skipOpts(s, i) { let o; while ((o = readOpt(s, i))) i = o[1]; return i; }
+
+  /* ---------- commands ---------- */
+  command(s, i, ctx) {
+    const m = /^\\([a-zA-Z@]+|.)/.exec(s.slice(i, i + 80));
+    if (!m) return { html: '', i: i + 1 };
+    let name = m[1]; let j = i + m[0].length;
+    const isWord = /^[a-zA-Z@]/.test(name);
+    let star = false;
+    if (isWord && s[j] === '*') { star = true; j++; }
+    const R = (html, k, newCtx) => ({ html, i: k === undefined ? j : k, ctx: newCtx });
+    const eatSp = (k) => { while (s[k] === ' ' || s[k] === '\t') k++; if (s[k] === '\n' && !/^\n[ \t]*\n/.test(s.slice(k, k + 40))) k++; while (s[k] === ' ' || s[k] === '\t') k++; return k; };
+    const arg = (k) => readArg(s, k) || ['', k];
+    const opt = (k) => readOpt(s, k);
+
+    if (!isWord) {
+      switch (name) {
+        case '\\': {
+          let k = j; if (s[k] === '*') k++;
+          const o = opt(k);
+          if (o) { const L = cssLen(o[0]); return R(`<span class="lb" style="height:${L || '0'}"></span>`, o[1]); }
+          return R('<br>', k);
+        }
+        case ',': return R('<span class="sp" style="width:0.1667em"></span>');
+        case ';': return R('<span class="sp" style="width:0.2778em"></span>');
+        case ':': case '>': return R('<span class="sp" style="width:0.2222em"></span>');
+        case '!': case '/': case '@': case '-': return R('');
+        case ' ': case '\n': case '\t': return R(' ');
+        case '%': case '$': case '&': case '#': case '_': case '{': case '}': return R(this.textOut(name, ctx).replace(/&amp;amp;/, '&amp;'));
+        case '[': {
+          const e = s.indexOf('\\]', j); const tex = s.slice(j, e < 0 ? s.length : e);
+          return R(BS + 'm<div class="dm">' + this.renderMath(tex.replace(/\\label\s*\{[^}]*\}/g, ''), true) + '</div>' + BE, e < 0 ? s.length : e + 2);
+        }
+        case '(': {
+          const e = s.indexOf('\\)', j); const tex = s.slice(j, e < 0 ? s.length : e);
+          const g = this.glue(this.sty(this.renderMath(tex, false), ctx.style), s, e < 0 ? s.length : e + 2, ctx);
+          return R(g[0], g[1]);
+        }
+        case ')': case ']': return R('');
+        default:
+          if (ACCENTS[name]) { const a = arg(j); return R(this.textOut(this.accent(a[0], name), ctx), a[1]); }
+          return R(this.textOut(name, ctx));
+      }
+    }
+    // word commands
+    if (ACCENTS[name] && name.length === 1 && /[uvHcdbkrt]/.test(name)) { const a = arg(j); return R(this.textOut(this.accent(a[0], name), ctx), a[1]); }
+    if (SYMBOLS[name] !== undefined) {
+      let k = eatSp(j); if (s[k] === '{' && s[k + 1] === '}') k += 2;
+      return R(this.textOut(SYMBOLS[name], ctx), k);
+    }
+    if (SPACES[name]) return R(`<span class="sp" style="width:${SPACES[name]}"></span>`, eatSp(j));
+    if (SIZES[name] !== undefined) {
+      const nc = this.withStyle(ctx, { size: SIZES[name] });
+      return R('', eatSp(j), nc);
+    }
+    switch (name) {
+      case 'begin': {
+        const a = arg(j); return this.env(a[0].trim(), s, a[1], ctx);
+      }
+      case 'end': { const a = arg(j); return R('', a[1]); }
+      // ---- font commands with argument
+      case 'textbf': case 'textit': case 'emph': case 'textsl': case 'texttt': case 'textsc': case 'textsf': case 'textrm':
+      case 'textup': case 'textmd': case 'textnormal': case 'mathbf': case 'mathit': case 'mathrm': case 'mathsf': case 'mathtt': {
+        const a = arg(j);
+        const add = { textbf: { b: true }, mathbf: { b: true }, textit: { i: true }, mathit: { i: true }, textsl: { sl: true }, texttt: { fam: 'tt' }, mathtt: { fam: 'tt' }, textsc: { sc: true },
+          textsf: { fam: 'sf' }, mathsf: { fam: 'sf' }, textrm: { fam: 'rm' }, mathrm: { fam: 'rm' }, textup: { i: false, sl: false }, textmd: { b: false }, textnormal: { b: false, i: false, sl: false, fam: null, sc: false } }[name]
+          || { i: !ctx.style.i };
+        return R(this.inl(a[0], this.withStyle(ctx, add)), a[1]);
+      }
+      case 'bfseries': case 'bf': return R('', eatSp(j), this.withStyle(ctx, { b: true }));
+      case 'itshape': case 'it': return R('', eatSp(j), this.withStyle(ctx, { i: true }));
+      case 'em': return R('', eatSp(j), this.withStyle(ctx, { i: !ctx.style.i }));
+      case 'slshape': case 'sl': return R('', eatSp(j), this.withStyle(ctx, { sl: true }));
+      case 'ttfamily': case 'tt': return R('', eatSp(j), this.withStyle(ctx, { fam: 'tt' }));
+      case 'sffamily': case 'sf': return R('', eatSp(j), this.withStyle(ctx, { fam: 'sf' }));
+      case 'rmfamily': case 'rm': return R('', eatSp(j), this.withStyle(ctx, { fam: 'rm' }));
+      case 'scshape': case 'sc': return R('', eatSp(j), this.withStyle(ctx, { sc: true }));
+      case 'upshape': return R('', eatSp(j), this.withStyle(ctx, { i: false, sl: false }));
+      case 'mdseries': return R('', eatSp(j), this.withStyle(ctx, { b: false }));
+      case 'normalfont': return R('', eatSp(j), this.withStyle(ctx, { b: false, i: false, sl: false, fam: null, sc: false }));
+      case 'color': {
+        const o = opt(j); let k = o ? o[1] : j; const a = arg(k);
+        const c = o ? colorFromModel(o[0], a[0]) : parseColor(a[0], this.D.colors);
+        if (!c) this.warn('Unknown colour: ' + a[0], 'col:' + a[0]);
+        return R('', a[1], this.withStyle(ctx, { color: rgbCss(c) || null }));
+      }
+      case 'textcolor': {
+        const o = opt(j); let k = o ? o[1] : j; const a = arg(k); const b = arg(a[1]);
+        const c = o ? colorFromModel(o[0], a[0]) : parseColor(a[0], this.D.colors);
+        if (!c) this.warn('Unknown colour: ' + a[0], 'col:' + a[0]);
+        return R(this.inl(b[0], this.withStyle(ctx, { color: rgbCss(c) || null })), b[1]);
+      }
+      case 'colorbox': case 'fcolorbox': {
+        const o = opt(j); let k = o ? o[1] : j; let fr = null;
+        if (name === 'fcolorbox') { const f = arg(k); fr = parseColor(f[0], this.D.colors); k = f[1]; }
+        const a = arg(k); const b = arg(a[1]);
+        const c = o ? colorFromModel(o[0], a[0]) : parseColor(a[0], this.D.colors);
+        return R(`<span class="cbox" style="background:${rgbCss(c)};${fr ? 'border:0.4pt solid ' + rgbCss(fr) : ''}">${this.inlineFinal(b[0], ctx)}</span>`, b[1]);
+      }
+      case 'hl': case 'highlight': { const a = arg(j); return R(`<mark>${this.inlineFinal(a[0], ctx)}</mark>`, a[1]); }
+      case 'underline': case 'uline': case 'ul': case 'uuline': case 'uwave': case 'dashuline': case 'dotuline': {
+        const a = arg(j);
+        const inner = this.inlineFinal(a[0], ctx);
+        if (!inner.replace(/<span class="(sp|hs)"[^>]*><\/span>/g, '').replace(/\s|&nbsp;|\u00a0/g, '')) {
+          // blank answer line: \underline{\hspace{3cm}}
+          const w = /\\(?:hspace|hskip|kern)\*?\s*\{?([^}]*)\}?/.exec(a[0]); const L = w ? cssLen(w[1]) : null;
+          return R(`<span class="blank" style="width:${L && L !== 'fill' ? L : (a[0].length * 0.3 + 'em')}"></span>`, a[1]);
+        }
+        const cls = name === 'uuline' ? 'uu' : (name === 'uwave' ? 'uw' : (name === 'dotuline' ? 'ud' : (name === 'dashuline' ? 'uda' : 'ul')));
+        return R(`<span class="${cls}">${inner}</span>`, a[1]);
+      }
+      case 'sout': case 'st': case 'xout': case 'cancel': { const a = arg(j); return R(`<s>${this.inlineFinal(a[0], ctx)}</s>`, a[1]); }
+      case 'textsuperscript': { const a = arg(j); return R(`<sup>${this.inlineFinal(a[0], ctx)}</sup>`, a[1]); }
+      case 'textsubscript': { const a = arg(j); return R(`<sub>${this.inlineFinal(a[0], ctx)}</sub>`, a[1]); }
+      case 'mbox': case 'hbox': case 'text': case 'nolinebreak': case 'nobr': { const a = arg(j); return R(`<span class="nobr">${this.inlineFinal(a[0], ctx)}</span>`, a[1]); }
+      case 'ensuremath': { const a = arg(j); const g = this.glue(this.sty(this.renderMath(a[0], false), ctx.style), s, a[1], ctx); return R(g[0], g[1]); }
+      case 'ce': case 'pu': { const a = arg(j); return R(this.sty(this.renderMath('\\' + name + '{' + a[0] + '}', false), ctx.style), a[1]); }
+      case 'boxed': case 'fbox': case 'framebox': case 'makebox': case 'boxed@': {
+        let k = j; let w = null, pos = null;
+        const o1 = opt(k); if (o1) { w = cssLen(o1[0]); k = o1[1]; const o2 = opt(k); if (o2) { pos = o2[0].trim(); k = o2[1]; } }
+        const a = arg(k);
+        const cls = name === 'makebox' ? 'mbx' : 'fbox';
+        const st = (w && w !== 'fill' ? `width:${w};` : '') + (pos ? `text-align:${{ l: 'left', r: 'right', c: 'center', s: 'justify' }[pos] || 'center'};` : (w ? 'text-align:center;' : ''));
+        return R(`<span class="${cls}"${st ? ' style="' + st + (w ? 'display:inline-block;' : '') + '"' : ''}>${this.inlineFinal(a[0], ctx)}</span>`, a[1]);
+      }
+      case 'parbox': {
+        let k = j; let pos = 'c'; const o1 = opt(k); if (o1) { pos = o1[0].trim(); k = o1[1]; const o2 = opt(k); if (o2) { k = o2[1]; const o3 = opt(k); if (o3) k = o3[1]; } }
+        const w = arg(k); const b = arg(w[1]);
+        const L = cssLen(w[0]);
+        return R(`<div class="mini va-${pos}" style="width:${L || 'auto'}">${this.block(b[0], Object.assign({}, ctx, { top: false }))}</div>`, b[1]);
+      }
+      case 'raisebox': {
+        const a = arg(j); let k = a[1]; const o1 = opt(k); if (o1) { k = o1[1]; const o2 = opt(k); if (o2) k = o2[1]; }
+        const b = arg(k); const L = cssLen(a[0]);
+        return R(`<span style="position:relative;bottom:${L || 0};display:inline-block">${this.inlineFinal(b[0], ctx)}</span>`, b[1]);
+      }
+      case 'scalebox': {
+        const a = arg(j); let k = a[1]; const o1 = opt(k); if (o1) k = o1[1]; const b = arg(k);
+        const f = parseFloat(a[0]) || 1;
+        return R(`<span class="scl" style="display:inline-block;zoom:${f}">${this.inlineFinal(b[0], ctx)}</span>`, b[1]);
+      }
+      case 'resizebox': case 'adjustbox': {
+        if (name === 'adjustbox') { const a = arg(j); const b = arg(a[1]); const kv = parseKV(a[0]); const w = cssLen(kv.get('width') || kv.get('max width')); return R(`<div class="rsz" style="${w ? 'width:' + w : ''}">${this.inlineFinal(b[0], ctx)}</div>`, b[1]); }
+        const a = arg(j); const h = arg(a[1]); const b = arg(h[1]);
+        const w = a[0].trim() === '!' ? null : cssLen(a[0]); const hh = h[0].trim() === '!' ? null : cssLen(h[0]);
+        return R(`<div class="rsz" style="${w ? 'width:' + w + ';' : ''}${hh && !w ? 'height:' + hh + ';' : ''}">${this.inlineFinal(b[0], ctx)}</div>`, b[1]);
+      }
+      case 'rotatebox': {
+        const o = opt(j); let k = o ? o[1] : j; const a = arg(k); const b = arg(a[1]);
+        return R(`<span style="display:inline-block;transform:rotate(${-parseFloat(a[0]) || 0}deg)">${this.inlineFinal(b[0], ctx)}</span>`, b[1]);
+      }
+      case 'reflectbox': { const a = arg(j); return R(`<span style="display:inline-block;transform:scaleX(-1)">${this.inlineFinal(a[0], ctx)}</span>`, a[1]); }
+      case 'phantom': case 'hphantom': { const a = arg(j); return R(`<span style="visibility:hidden">${this.inlineFinal(a[0], ctx)}</span>`, a[1]); }
+      case 'vphantom': { const a = arg(j); return R('', a[1]); }
+      case 'rule': {
+        let k = j; let raise = null; const o = opt(k); if (o) { raise = cssLen(o[0]); k = o[1]; }
+        const w = arg(k); const h = arg(w[1]);
+        const W = cssLen(w[0]), H = cssLen(h[0]);
+        return R(`<span class="rule" style="width:${W || 0};height:${H || 0};${raise ? 'vertical-align:' + raise : ''}"></span>`, h[1]);
+      }
+      // ---- spacing
+      case 'hspace': case 'hskip': case 'kern': case 'mspace': {
+        let a; if (name === 'hskip' || name === 'kern') { const mm = /^\s*([-+]?[\d.]+\s*[a-z]{2}|\\[a-z]+)/.exec(s.slice(j)); a = mm ? [mm[1], j + mm[0].length] : ['0pt', j]; } else a = arg(j);
+        const L = cssLen(a[0]);
+        if (L === 'fill') return R(HF + 'f', a[1]);
+        return R(`<span class="hs" style="width:${L || 0}"></span>`, a[1]);
+      }
+      case 'hfill': return R(HF + 'f', eatSp(j));
+      case 'dotfill': return R(HF + 'd', eatSp(j));
+      case 'hrulefill': return R(HF + 'r', eatSp(j));
+      case 'vspace': case 'vskip': case 'addvspace': {
+        let a; if (name === 'vskip') { const mm = /^\s*([-+]?[\d.]+\s*[a-z]{2}|\\[a-z]+)/.exec(s.slice(j)); a = mm ? [mm[1], j + mm[0].length] : ['0pt', j]; } else a = arg(j);
+        let L = cssLen(a[0]); if (L === 'fill') L = '2.5em'; if (L && L.endsWith('%')) L = (parseFloat(L) / 100 * 23) + 'cm';
+        return R(BS + `v<div class="vs" style="height:${L || 0}"></div>` + BE, a[1]);
+      }
+      case 'vfill': case 'vfil': return R(BS + 'v<div class="vs" style="height:2.5em"></div>' + BE, eatSp(j));
+      case 'smallskip': return R(BS + 'v<div class="vs" style="height:3pt"></div>' + BE, eatSp(j));
+      case 'medskip': return R(BS + 'v<div class="vs" style="height:6pt"></div>' + BE, eatSp(j));
+      case 'bigskip': return R(BS + 'v<div class="vs" style="height:12pt"></div>' + BE, eatSp(j));
+      case 'par': return R(PAR, eatSp(j));
+      case 'noindent': return R(NOI, eatSp(j));
+      case 'newline': case 'linebreak': case 'break': { const o = opt(j); return R('<br>', eatSp(o ? o[1] : j)); }
+      case 'newpage': case 'clearpage': case 'cleardoublepage': case 'pagebreak': case 'eject': case 'newpage@': case 'nextpage': {
+        const o = opt(j); return R(BS + 'b<div class="pb"></div>' + BE, eatSp(o ? o[1] : j));
+      }
+      case 'centering': return R(AL + 'c', eatSp(j));
+      case 'raggedright': return R(AL + 'l', eatSp(j));
+      case 'raggedleft': return R(AL + 'r', eatSp(j));
+      // ---- structure
+      case 'part': case 'chapter': case 'section': case 'subsection': case 'subsubsection': case 'paragraph': case 'subparagraph': {
+        if (ctx.examPart && name === 'part') return R('', j); // handled by list splitter
+        const o = opt(j); const a = arg(o ? o[1] : j);
+        return R(this.heading(name, star, a[0], ctx), a[1]);
+      }
+      case 'appendix': this.appendix = true; this.cnt.section = 0; this.cnt.chapter = 0; return R('', eatSp(j));
+      case 'maketitle': return R(this.titleBlock(ctx), eatSp(j));
+      case 'title': { const o = opt(j); const a = arg(o ? o[1] : j); this.title = a[0]; return R('', a[1]); }
+      case 'author': { const o = opt(j); const a = arg(o ? o[1] : j); this.author = a[0]; return R('', a[1]); }
+      case 'date': { const a = arg(j); this.date = a[0]; return R('', a[1]); }
+      case 'thanks': { const a = arg(j); return R(this.footnote(a[0], ctx, '*'), a[1]); }
+      case 'and': return R('<span class="and"></span>', eatSp(j));
+      case 'tableofcontents': return R(RF + 'TOC' + RF, eatSp(j));
+      case 'today': return R(this.textOut(this.today(), ctx), eatSp(j));
+      case 'LaTeX': return R(this.sty('<span class="latex">L<sup>a</sup>T<sub>e</sub>X</span>', ctx.style), eatSp(j));
+      case 'LaTeXe': return R(this.sty('<span class="latex">L<sup>a</sup>T<sub>e</sub>X\u20092<sub>\u03b5</sub></span>', ctx.style), eatSp(j));
+      case 'TeX': return R(this.sty('<span class="latex">T<sub>e</sub>X</span>', ctx.style), eatSp(j));
+      case 'XeLaTeX': return R(this.textOut('XeLaTeX', ctx), eatSp(j));
+      case 'label': {
+        const a = arg(j); const k = a[0].trim();
+        this.labels[k] = this.lastRef; this.labelKind[k] = this.lastKind; return R('', a[1]);
+      }
+      case 'ref': case 'eqref': case 'cref': case 'Cref': case 'autoref': case 'nameref': case 'pageref': case 'vref': {
+        const a = arg(j);
+        const kind = (name === 'cref' || name === 'Cref' || name === 'autoref') ? 'autoref' : (name === 'vref' ? 'ref' : name);
+        const keys = a[0].split(',').map(x => x.trim());
+        return R(this.sty(keys.map(k => RF + kind + ':' + k + RF).join(', '), ctx.style), a[1]);
+      }
+      case 'cite': case 'citep': case 'citet': case 'parencite': case 'textcite': case 'autocite': {
+        const o = opt(j); let k = o ? o[1] : j; const o2 = opt(k); if (o2) k = o2[1]; const a = arg(k);
+        return R(this.sty(RF + 'cite:' + a[0] + RF, ctx.style), a[1]);
+      }
+      case 'bibitem': return R('', j);
+      case 'footnote': {
+        const o = opt(j); const a = arg(o ? o[1] : j);
+        return R(this.footnote(a[0], ctx, o ? o[0] : null), a[1]);
+      }
+      case 'footnotemark': { const o = opt(j); const n = o ? o[0] : String(++this.cnt.fnm || (this.cnt.fnm = 1)); return R(`<sup class="fnm">${esc(n)}</sup>`, o ? o[1] : j); }
+      case 'footnotetext': { const o = opt(j); const a = arg(o ? o[1] : j); this.foot.push({ mark: o ? o[0] : this.foot.length + 1, html: this.inlineFinal(a[0], ctx) }); return R('', a[1]); }
+      case 'href': { const a = arg(j); const b = arg(a[1]); return R(`<a href="${esc(a[0].replace(/\\([#%_&])/g, '$1'))}">${this.inlineFinal(b[0], ctx)}</a>`, b[1]); }
+      case 'url': case 'nolinkurl': { const a = arg(j); const u = a[0].replace(/\\([#%_&~])/g, '$1'); return R(`<a class="tt" href="${esc(u)}">${esc(u)}</a>`, a[1]); }
+      case 'includegraphics': {
+        let k = j; const o = opt(k); if (o) k = o[1]; const a = arg(k);
+        return R(this.image(a[0].trim(), o ? o[0] : '', ctx), a[1]);
+      }
+      case 'caption': case 'captionof': case 'subcaption': {
+        let k = j; let kind = ctx.float || 'figure';
+        if (name === 'captionof') { const t = arg(k); kind = t[0].trim(); k = t[1]; }
+        const o = opt(k); if (o) k = o[1]; const a = arg(k);
+        return R(this.caption(kind, star, a[0], ctx, name === 'subcaption' || ctx.subfloat), a[1]);
+      }
+      case 'tikz': {
+        // \tikz[opts]{...} or \tikz ... ;
+        let k = j; let opts = ''; const o = opt(k); if (o) { opts = '[' + o[0] + ']'; k = o[1]; }
+        k = skipSp(s, k); let code;
+        if (s[k] === '{') { const e = matchBrace(s, k); code = s.slice(k + 1, e); k = e + 1; }
+        else { const e = s.indexOf(';', k); code = s.slice(k, e + 1); k = e + 1; }
+        return R(this.tikzBox('\\begin{tikzpicture}' + opts + '\n' + code + '\n\\end{tikzpicture}', ctx, true), k);
+      }
+      case 'ding': { const a = arg(j); return R(this.textOut(DING[parseInt(a[0], 10)] || '\u2022', ctx), a[1]); }
+      case 'textcircled': case 'circled': {
+        const a = arg(j); const t = a[0].trim(); const nnum = parseInt(t, 10);
+        const ch = (nnum >= 1 && nnum <= 20) ? String.fromCharCode(0x2460 + nnum - 1) : (/^[a-z]$/.test(t) ? String.fromCharCode(0x24d0 + t.charCodeAt(0) - 97) : (/^[A-Z]$/.test(t) ? String.fromCharCode(0x24b6 + t.charCodeAt(0) - 65) : null));
+        return R(ch ? this.textOut(ch, ctx) : `<span class="circ">${this.inlineFinal(a[0], ctx)}</span>`, a[1]);
+      }
+      case 'lipsum': case 'blindtext': {
+        const o = opt(j); const L = 'Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Ut purus elit, vestibulum ut, placerat ac, adipiscing vitae, felis. Curabitur dictum gravida mauris. Nam arcu libero, nonummy eget, consectetuer id, vulputate a, magna. Donec vehicula augue eu neque.';
+        let cnt = 1; if (o) { const p = o[0].split('-'); cnt = p.length > 1 ? (+p[1] - +p[0] + 1) : 1; }
+        return R(Array.from({ length: Math.max(1, Math.min(cnt, 20)) }, () => L).join(PAR) + PAR, o ? o[1] : j);
+      }
+      // ---- exam class
+      case 'fillin': {
+        let k = j; let ans = '', w = null; const o1 = opt(k); if (o1) { ans = o1[0]; k = o1[1]; const o2 = opt(k); if (o2) { w = cssLen(o2[0]); k = o2[1]; } }
+        if (this.showAnswers() && ans) return R(`<span class="fillin ans" style="min-width:${w || '1in'}">${this.inlineFinal(ans, ctx)}</span>`, k);
+        return R(`<span class="blank" style="width:${w || '1in'}"></span>`, k);
+      }
+      case 'answerline': {
+        const o = opt(j); const ans = o && this.showAnswers() ? this.inlineFinal(o[0], ctx) : '';
+        return R(BS + `b<div class="ansline">Answer: <span class="blank" style="width:2.5in">${ans ? '<span class="ans">' + ans + '</span>' : ''}</span></div>` + BE, o ? o[1] : j);
+      }
+      case 'fillwithlines': case 'fillwithdottedlines': case 'makeemptybox': case 'fillwithgrid': {
+        const a = arg(j); let L = cssLen(a[0]); if (!L || L === 'fill') L = '6em';
+        const cls = { fillwithlines: 'lines', fillwithdottedlines: 'dlines', makeemptybox: 'ebox', fillwithgrid: 'grid' }[name];
+        return R(BS + `b<div class="${cls}" style="height:${L}"></div>` + BE, a[1]);
+      }
+      case 'numquestions': return R(RF + 'numq:' + RF, eatSp(j));
+      case 'numpoints': return R(RF + 'nump:' + RF, eatSp(j));
+      case 'droppoints': case 'droptotalpoints': case 'droppartpoints': return R('', eatSp(j));
+      case 'gradetable': case 'pointtable': case 'combinedgradetable': case 'multicolumnpartialgradetable': {
+        let k = j; const o = opt(k); if (o) k = o[1]; const o2 = opt(k); if (o2) k = o2[1];
+        this.warn('Grade tables (\\' + name + ') are not shown', 'gradetable'); return R('', k);
+      }
+      case 'uplevel': { const a = arg(j); return R(BS + 'b' + this.block(a[0], Object.assign({}, ctx, { top: false })) + BE, a[1]); }
+      case 'setcounter': {
+        const a = arg(j); const b = arg(a[1]); const v = parseInt(b[0], 10);
+        if (/^enum(i|ii|iii|iv)$/.test(a[0].trim())) ctx.enumSet = v;
+        else if (a[0].trim() === 'section') this.cnt.section = v;
+        else if (a[0].trim() === 'equation') this.cnt.equation = v;
+        else if (a[0].trim() === 'question') this.cnt.question = v;
+        else if (a[0].trim() === 'figure') this.cnt.figure = v;
+        else if (a[0].trim() === 'table') this.cnt.table = v;
+        return R('', b[1]);
+      }
+      case 'item': case 'question': case 'subpart': case 'subsubpart': case 'choice': case 'CorrectChoice': case 'task': case 'titledquestion': {
+        const o = opt(j); return R('', o ? o[1] : j);
+      }
+      case 'input': case 'include': { const a = arg(j); return R('', a[1]); }
+      case 'newcommand': case 'renewcommand': { const a = arg(j); return R('', a[1]); }
+      case 'quad': return R('<span class="sp" style="width:1em"></span>', eatSp(j));
+    }
+    if (IGNORE[name] !== undefined) {
+      let k = this.skipOpts(s, j);
+      for (let a = 0; a < IGNORE[name]; a++) { const r = readArg(s, k); if (r) k = r[1]; k = this.skipOpts(s, k); }
+      return R('', name === 'usetikzlibrary' ? k : (IGNORE[name] === 0 ? eatSp(k) : k));
+    }
+    // user theorem-like? no: unknown command
+    this.warn('Unknown command \\' + name + ' (its text is shown as plain text)', 'cmd:' + name);
+    let k = this.skipOpts(s, j);
+    const k2 = skipSp(s, k);
+    if (s[k2] === '{') { const a = readArg(s, k); return R(this.inl(a[0], ctx), a[1]); }
+    return R('', eatSp(k));
+  }
+
+  accent(base, acc) {
+    base = base.replace(/^\\(i|j)$/, (a, x) => x === 'i' ? '\u0131' : '\u0237');
+    const mark = ACCENTS[acc] || '';
+    return (base || ' ').normalize('NFD').slice(0, 1) + mark + (base || '').slice(1);
+  }
+  today() {
+    const d = new Date();
+    if (this.P.ctex) return `${d.getFullYear()}\u5e74${d.getMonth() + 1}\u6708${d.getDate()}\u65e5`;
+    const M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${M[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+  showAnswers() { return this.o.showAnswers != null ? this.o.showAnswers : !!this.P.answers; }
+
+  heading(kind, star, title, ctx) {
+    const lv = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3, paragraph: 4, subparagraph: 5 }[kind];
+    const book = /report|book|ctexrep|ctexbook|scrreprt|scrbook|memoir/.test(this.P.cls);
+    let num = '';
+    const numbered = !star && lv <= this.P.secnumdepth;
+    if (!star) {
+      const order = ['part', 'chapter', 'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
+      this.cnt[kind] = (this.cnt[kind] || 0) + 1;
+      for (const o of order.slice(order.indexOf(kind) + 1)) this.cnt[o] = 0;
+      if (kind === 'chapter' || kind === 'section') { if (book === (kind === 'chapter')) { this.cnt.equation = 0; this.cnt.figure = 0; this.cnt.table = 0; } }
+      const sec = this.appendix && kind === (book ? 'chapter' : 'section') ? String.fromCharCode(64 + this.cnt[kind]) : null;
+      const parts = [];
+      if (book) parts.push(this.appendix ? String.fromCharCode(64 + this.cnt.chapter) : this.cnt.chapter);
+      const chain = book ? ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'] : ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
+      if (kind === 'part') num = this.roman(this.cnt.part).toUpperCase();
+      else if (kind === 'chapter') num = String(parts[0]);
+      else {
+        const idx = chain.indexOf(kind);
+        const nums = chain.slice(0, idx + 1).map((c, k) => (k === 0 && !book && this.appendix) ? String.fromCharCode(64 + this.cnt[c]) : this.cnt[c]);
+        num = (book ? parts.concat(nums) : nums).join('.');
+      }
+      this.lastRef = num; this.lastKind = 'section';
+    }
+    const th = this.inlineFinal(title, this.withStyle(ctx, { b: true }));
+    if (kind === 'paragraph' || kind === 'subparagraph') {
+      return PAR + NOI + `<b class="runin">${numbered ? num + '\u2003' : ''}${th}</b>\u2003`;
+    }
+    const tag = { part: 'h1', chapter: 'h1', section: 'h2', subsection: 'h3', subsubsection: 'h4' }[kind];
+    if (!star && numbered) this.toc.push({ level: lv, num, html: th });
+    else if (!star) this.toc.push({ level: lv, num: '', html: th });
+    let pre = '';
+    if (kind === 'chapter') pre = `<div class="chap">${this.P.ctex ? '\u7b2c' + num + '\u7ae0' : 'Chapter ' + num}</div>`;
+    if (kind === 'part') pre = `<div class="chap">Part ${num}</div>`;
+    const center = /^ctex/.test(this.P.cls) && kind === 'section';
+    return BS + `h<${tag} class="sec ${kind}${center ? ' al-c' : ''}">${pre}${numbered && kind !== 'chapter' && kind !== 'part' ? '<span class="sn">' + num + '</span>' : ''}${th}</${tag}>` + BE;
+  }
+  roman(n) { const r = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']]; let s = ''; for (const [v, t] of r) while (n >= v) { s += t; n -= v; } return s; }
+  titleBlock(ctx) {
+    const c = this.withStyle(ctx, {});
+    const t = this.title ? `<div class="ttl">${this.inlineFinal(this.title, c)}</div>` : '';
+    let au = '';
+    if (this.author) {
+      const parts = this.author.split(/\\and\b/).map(a => `<div class="au1">${this.inlineFinal(a.replace(/\\\\/g, '<<BR>>'), c).replace(/&lt;&lt;BR&gt;&gt;/g, '<br>')}</div>`);
+      au = `<div class="au">${parts.join('')}</div>`;
+    }
+    const d = this.date === '' ? '' : `<div class="dt">${this.date == null ? esc(this.today()) : this.inlineFinal(this.date, c)}</div>`;
+    return BS + `b<div class="titleblk">${t}${au}${d}</div>` + BE;
+  }
+  footnote(text, ctx, mark) {
+    let m = mark;
+    if (m == null) { this.cnt.footnote = (this.cnt.footnote || 0) + 1; m = String(this.cnt.footnote); }
+    this.foot.push({ mark: esc(m), html: this.inlineFinal(text, this.withStyle(ctx, {})) });
+    return `<sup class="fnm">${esc(m)}</sup>`;
+  }
+  caption(kind, star, text, ctx, sub) {
+    const isTab = /^table/.test(kind);
+    let lbl = '';
+    if (sub) {
+      ctx.subCount = (ctx.subCount || 0) + 1;
+      lbl = '(' + String.fromCharCode(96 + ctx.subCount) + ') ';
+      this.lastRef = (isTab ? this.cnt.table + 1 : this.cnt.figure + 1) + String.fromCharCode(96 + ctx.subCount);
+      this.lastKind = isTab ? 'table' : 'figure';
+    } else if (!star) {
+      const k = isTab ? 'table' : 'figure'; this.cnt[k]++;
+      const n = this.cnt[k];
+      lbl = `<span class="capl">${esc(this.name(isTab ? 'tablename' : 'figurename'))}${this.P.ctex ? '' : '\u00a0'}${n}${this.P.ctex ? '\u3000' : ': '}</span>`;
+      this.lastRef = String(n); this.lastKind = k;
+    }
+    return BS + `b<div class="caption">${lbl}${this.inlineFinal(text, this.withStyle(ctx, {}))}</div>` + BE;
+  }
+  image(file, optStr, ctx) {
+    const kv = parseKV(optStr);
+    const img = this.o.findImage ? this.o.findImage(file) : null;
+    if (!img) {
+      this.warn('Missing image: ' + file, 'img:' + file);
+      if (this.o.missingImages) this.o.missingImages.add(file);
+      return `<span class="missing">[image: ${esc(file)}]</span>`;
+    }
+    if (img.error) { this.warn(img.error, 'imgerr:' + file); return `<span class="missing">[${esc(img.error)}]</span>`; }
+    let st = '';
+    const w = kv.has('width') ? cssLen(kv.get('width')) : null;
+    const h = kv.has('height') ? cssLen(kv.get('height')) : (kv.has('totalheight') ? cssLen(kv.get('totalheight')) : null);
+    const sc = kv.has('scale') ? parseFloat(kv.get('scale')) : null;
+    if (w && w !== 'fill') st += `width:${w};`;
+    if (h && h !== 'fill') st += `height:${h};`;
+    if (w && h && !kv.has('keepaspectratio')) st += 'object-fit:fill;'; else if (w && h) st += 'object-fit:contain;';
+    if (!w && !h) {
+      const f = sc || 1;
+      st += `width:${(img.wpt * f).toFixed(2)}pt;`;
+    }
+    if (kv.has('max width')) st += `max-width:${cssLen(kv.get('max width'))};`;
+    st += 'max-width:100%;';
+    const ang = kv.has('angle') ? parseFloat(kv.get('angle')) : 0;
+    if (ang) st += `transform:rotate(${-ang}deg);`;
+    return `<img class="ig" src="${img.url}" alt="" style="${st}">`;
+  }
+  tikzBox(src, ctx, inline) {
+    const idx = this.tikz.length;
+    const cjk = /[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(src);
+    if (cjk) this.warn('Chinese characters inside a TikZ diagram cannot be drawn (the diagram engine has no Chinese fonts)', 'tikzcjk');
+    this.tikz.push({ src });
+    return `<div class="tikz${inline ? ' tz-in' : ''}" data-i="${idx}"><span class="tz-wait">Drawing diagram\u2026</span></div>`;
+  }
+
+  /* ---------- environments ---------- */
+  env(name, s, i, ctx) {
+    const [bEnd, after] = findEnd(s, i, name);
+    let body = s.slice(i, bEnd);
+    const R = (html, newCtx) => ({ html, i: after, ctx: newCtx });
+    const base = name.replace(/\*$/, '');
+    const sub = Object.assign({}, ctx, { top: false });
+    const optB = () => { const o = readOpt(body, 0); if (o) { const v = o[0]; body = body.slice(o[1]); return v; } return null; };
+    const argB = () => { const a = readArg(body, 0); if (a) { body = body.slice(a[1]); return a[0]; } return ''; };
+    // user environments
+    if (this.D.envs.has(name)) {
+      const d = this.D.envs.get(name); const args = [];
+      for (const p of d.params) {
+        if (p.t === 'o') { const o = readOpt(body, 0); if (o) { args.push(o[0]); body = body.slice(o[1]); } else args.push(p.d || ''); }
+        else args.push(argB());
+      }
+      const sub2 = (t) => t.replace(/##|#([1-9])/g, (x, k) => k ? (args[k - 1] || '') : '#');
+      const src = siExpand(expandMacros(sub2(d.begin) + ' ' + body + sub2(d.end), this.D.macros));
+      return R(this.inl('{' + src + '}', ctx));
+    }
+    if (this.D.theorems.has(base)) {
+      const t = this.D.theorems.get(base); const title = optB();
+      let num = '';
+      if (t.numbered && !/\*$/.test(name)) { this.thmCnt[t.counter] = (this.thmCnt[t.counter] || 0) + 1; num = ' ' + this.thmCnt[t.counter]; this.lastRef = num.trim(); this.lastKind = 'thm'; }
+      const head = `<b>${this.inlineFinal(t.title, ctx)}${num}</b>${title ? ' (' + this.inlineFinal(title, ctx) + ')' : ''}<b>.</b>\u2003`;
+      return R(BS + 'b<div class="thm">' + this.paras(NOI + head + this.inl(body, this.withStyle(sub, { i: true })), false) + '</div>' + BE);
+    }
+    if (SIZES[base] !== undefined) return R(this.inl(body, this.withStyle(ctx, { size: SIZES[base] })));
+    switch (base) {
+      case 'document': return R(this.inl(body, ctx));
+      case 'equation': case 'align': case 'gather': case 'multline': case 'flalign': case 'alignat': case 'eqnarray': case 'displaymath': case 'xalignat':
+        return R(this.displayEnv(name, body));
+      case 'math': return R(this.sty(this.renderMath(body, false), ctx.style));
+      case 'subequations': return R(this.inl(body, ctx));
+      case 'center': case 'centering': return R(BS + 'b' + this.block(AL + 'c' + body, sub) + BE);
+      case 'flushleft': case 'raggedright': return R(BS + 'b' + this.block(AL + 'l' + body, sub) + BE);
+      case 'flushright': case 'raggedleft': return R(BS + 'b' + this.block(AL + 'r' + body, sub) + BE);
+      case 'quote': case 'quotation': case 'verse': return R(BS + `b<div class="quote ${base}">` + this.block(body, Object.assign({}, sub, { top: base === 'quotation' })) + '</div>' + BE);
+      case 'abstract': return R(BS + `b<div class="abstract"><div class="abs-h">${esc(this.name('abstractname'))}</div>` + this.block(body, Object.assign({}, sub, { top: true })) + '</div>' + BE);
+      case 'proof': {
+        const t = optB();
+        return R(BS + 'b<div class="proof">' + this.paras(NOI + `<i>${t ? this.inlineFinal(t, ctx) : esc(this.name('proofname'))}.</i>\u2003` + this.inl(body, sub) + HF + 'f\u220e', false) + '</div>' + BE);
+      }
+      case 'titlepage': return R(BS + 'b<div class="titlepage">' + this.block(body, sub) + '</div><div class="pb"></div>' + BE);
+      case 'coverpages': return R(BS + 'b' + this.block(body, sub) + BE);
+      case 'figure': case 'table': case 'wrapfigure': case 'wraptable': case 'sidewaysfigure': case 'sidewaystable': case 'SCfigure': case 'SCtable': case 'figwindow': {
+        if (base === 'wrapfigure' || base === 'wraptable') { optB(); argB(); optB(); argB(); } else optB();
+        const kind = /table/i.test(base) ? 'table' : 'figure';
+        const c = Object.assign({}, sub, { float: kind, subCount: 0 });
+        return R(BS + `b<div class="float ${kind}">` + this.block(AL + 'c' + body, c) + '</div>' + BE);
+      }
+      case 'subfigure': case 'subtable': {
+        optB(); const w = argB(); const L = cssLen(w);
+        ctx.subCount = ctx.subCount || 0;
+        const c = Object.assign({}, sub, { float: ctx.float || (base === 'subtable' ? 'table' : 'figure'), subfloat: true });
+        const html = this.block(AL + 'c' + body, c); ctx.subCount = c.subCount;
+        return R(`<div class="mini va-b" style="width:${L || 'auto'}">${html}</div>`);
+      }
+      case 'minipage': {
+        const pos = optB(); optB(); optB(); const w = argB(); const L = cssLen(w);
+        const c = Object.assign({}, sub, { indentOff: true });
+        return R(`<div class="mini va-${(pos || 'c').trim()[0] || 'c'}" style="width:${L && L !== 'fill' ? L : 'auto'}">${this.block(body, c)}</div>`);
+      }
+      case 'tabular': case 'tabularx': case 'tabulary': case 'longtable': case 'tabu': case 'longtabu': case 'xltabular': case 'tblr': case 'array': case 'NiceTabular': {
+        let width = null;
+        if (base === 'tabularx' || base === 'tabulary' || base === 'xltabular' || name === 'tabular*') width = cssLen(argB());
+        if (base === 'tabu' || base === 'longtabu') { const m2 = /^\s*(to|spread)\s*([^{]*)/.exec(body); if (m2) { width = cssLen(m2[2]); body = body.slice(m2[0].length); } }
+        const pos = optB();
+        const spec = argB();
+        if (base === 'array') return R(this.sty(this.renderMath('\\begin{array}{' + spec + '}' + body + '\\end{array}', false), ctx.style));
+        return R(this.table(spec, body, ctx, { width, long: /long/.test(base), pos }));
+      }
+      case 'itemize': case 'enumerate': case 'description': case 'compactitem': case 'compactenum': case 'compactdesc':
+      case 'asparaenum': case 'asparaitem': case 'inparaenum': case 'inparaitem': case 'enumerate*': case 'itemize*': case 'checklist': {
+        const o = optB();
+        let kind = /enum/.test(base) ? 'enum' : (/desc/.test(base) ? 'desc' : 'item');
+        const inline = /^inpara/.test(base) || /\*$/.test(name) && /^(enumerate|itemize)/.test(name);
+        return R(BS + 'b' + this.list(kind, body, o, ctx, { inline }) + BE);
+      }
+      case 'questions': return R(BS + 'b' + this.list('question', body, optB(), ctx, {}) + BE);
+      case 'parts': return R(BS + 'b' + this.list('part', body, optB(), ctx, {}) + BE);
+      case 'subparts': return R(BS + 'b' + this.list('subpart', body, optB(), ctx, {}) + BE);
+      case 'subsubparts': return R(BS + 'b' + this.list('subsubpart', body, optB(), ctx, {}) + BE);
+      case 'choices': case 'checkboxes': return R(BS + 'b' + this.list(base === 'checkboxes' ? 'checkbox' : 'choice', body, optB(), ctx, {}) + BE);
+      case 'oneparchoices': case 'oneparcheckboxes': return R(BS + 'b' + this.list(base === 'oneparcheckboxes' ? 'checkbox' : 'choice', body, optB(), ctx, { inline: true }) + BE);
+      case 'tasks': {
+        const p = readParen(body, 0); let cols = 1; if (p) { cols = parseInt(p[0], 10) || 1; body = body.slice(p[1]); }
+        const o = optB(); const p2 = readParen(body, 0); if (p2) { cols = parseInt(p2[0], 10) || cols; body = body.slice(p2[1]); }
+        return R(BS + 'b' + this.list('task', body, o, ctx, { cols }) + BE);
+      }
+      case 'solution': case 'solutionorbox': case 'solutionorlines': case 'solutionordottedlines': case 'solutionorgrid': {
+        const o = optB(); let L = o ? cssLen(o[0] || o) : null; if (L === 'fill') L = '8em';
+        if (this.showAnswers()) return R(BS + `b<div class="soln"><b>${esc(this.name('solutiontitle'))}</b> ` + this.paras(this.inl(body, sub), false) + '</div>' + BE);
+        if (base === 'solution') return R(L ? BS + `v<div class="vs" style="height:${L}"></div>` + BE : '');
+        const cls = { solutionorbox: 'ebox', solutionorlines: 'lines', solutionordottedlines: 'dlines', solutionorgrid: 'grid' }[base];
+        return R(BS + `b<div class="${cls}" style="height:${L || '8em'}"></div>` + BE);
+      }
+      case 'multicols': {
+        const n = parseInt(argB(), 10) || 2; const pre = optB();
+        return R(BS + 'b' + (pre ? this.block(pre, sub) : '') + `<div class="mcols" style="column-count:${n}">` + this.block(body, Object.assign({}, sub, { top: true })) + '</div>' + BE);
+      }
+      case 'tikzpicture': case 'circuitikz': case 'tikzcd': case 'axis': case 'scope': {
+        return R(this.tikzBox(`\\begin{${name}}${body}\\end{${name}}`, ctx));
+      }
+      case 'thebibliography': {
+        argB(); const items = splitTop(body, (t, k) => /^\\bibitem(?![a-zA-Z])/.test(t.slice(k, k + 9)) ? 8 : 0);
+        let html = `<h2 class="sec nonum">${esc(this.name('refname'))}</h2><div class="bib">`;
+        for (const it of items.slice(1)) {
+          let t = it.text; const o = readOpt(t, 0); if (o) t = t.slice(o[1]); const k = readArg(t, 0); if (!k) continue; t = t.slice(k[1]);
+          this.bibN++; const lab = o ? o[0] : String(this.bibN); this.bib[k[0].trim()] = lab;
+          html += `<div class="it"><span class="lbl">[${esc(lab)}]</span><div class="ib">${this.block(t, sub)}</div></div>`;
+        }
+        return R(BS + 'b' + html + '</div>' + BE);
+      }
+      case 'tcolorbox': case 'mdframed': case 'framed': case 'shaded': case 'leftbar': case 'boxedminipage': case 'fbox': case 'Sbox': case 'snugshade': case 'oframed': {
+        const o = optB(); let w = null; if (base === 'boxedminipage') w = cssLen(argB());
+        const kv = parseKV(o || '');
+        const title = kv.get('title');
+        const col = kv.has('colback') ? parseColor(kv.get('colback'), this.D.colors) : null;
+        const fr = kv.has('colframe') ? parseColor(kv.get('colframe'), this.D.colors) : (kv.has('linecolor') ? parseColor(kv.get('linecolor'), this.D.colors) : null);
+        const st = (col ? `background:${rgbCss(col)};` : (base === 'shaded' || base === 'snugshade' ? 'background:#eee;border:0;' : '')) + (fr ? `border-color:${rgbCss(fr)};` : '') + (w ? `width:${w};` : '');
+        return R(BS + `b<div class="frm ${base}" style="${st}">${title ? `<div class="frm-t" style="${fr ? 'background:' + rgbCss(fr) : ''}">${this.inlineFinal(title, ctx)}</div>` : ''}<div class="frm-b">${this.block(body, sub)}</div></div>` + BE);
+      }
+      case 'spacing': case 'onehalfspace': case 'doublespace': case 'singlespace': case 'singlespace*': {
+        let f = base === 'onehalfspace' ? 1.5 : base === 'doublespace' ? 2 : 1; if (base === 'spacing') f = parseFloat(argB()) || 1;
+        return R(BS + `b<div style="line-height:${(1.25 * f).toFixed(2)}">` + this.block(body, sub) + '</div>' + BE);
+      }
+      case 'landscape': case 'adjustwidth': case 'samepage': case 'sloppypar': case 'otherlanguage': case 'english': case 'small': case 'group': case 'refsection': case 'appendices': case 'CJK': case 'CJK*': case 'linenumbers': case 'nolinenumbers': case 'savenotes': case 'esamepage': case 'absolutelynopagebreak': case 'trivlist': case 'list':
+        if (base === 'adjustwidth') { argB(); argB(); }
+        if (base === 'CJK' || base === 'otherlanguage') { optB(); argB(); argB(); }
+        if (base === 'list') { argB(); argB(); }
+        return R(this.inl(body, ctx));
+      case 'comment': return R('');
+      case 'columns': return R(BS + 'b<div class="cols">' + this.block(body, sub) + '</div>' + BE);
+      case 'column': { const w = cssLen(argB()); return R(`<div class="mini va-t" style="width:${w || '48%'}">${this.block(body, sub)}</div>`); }
+    }
+    this.warn('Unknown environment {' + name + '} (its contents are shown as plain text)', 'env:' + name);
+    return R(BS + 'b' + this.block(body, sub) + BE);
+  }
+
+  /* ---------- lists ---------- */
+  fmtCounter(n, style) {
+    switch (style) {
+      case 'alph': return String.fromCharCode(96 + ((n - 1) % 26) + 1);
+      case 'Alph': return String.fromCharCode(64 + ((n - 1) % 26) + 1);
+      case 'roman': return this.roman(n);
+      case 'Roman': return this.roman(n).toUpperCase();
+      case 'greek': return 'αβγδεζηθικλμνξοπρστυφχψω'[(n - 1) % 24];
+      case 'fnsymbol': return ['*', '\u2020', '\u2021', '\u00a7', '\u00b6', '\u2016', '**'][(n - 1) % 7];
+      case 'cjkchar': case 'chinese': return '\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341'[(n - 1) % 10];
+      default: return String(n);
+    }
+  }
+  labelFromTemplate(tpl, n) {
+    return tpl.replace(/\\(arabic|alph|Alph|roman|Roman|greek|fnsymbol|chinese|cjkchar)\*/g, (a, st) => this.fmtCounter(n, st))
+      .replace(/\\(arabic|alph|Alph|roman|Roman)\s*\{[^}]*\}/g, (a, st) => this.fmtCounter(n, st));
+  }
+  shortLabel(opt) { // enumerate package style: [(a)], [i.], [Q1.]
+    let d = 0;
+    for (let k = 0; k < opt.length; k++) {
+      const c = opt[k];
+      if (c === '{') d++; else if (c === '}') d--;
+      else if (c === '\\') { const m = /^\\[a-zA-Z]+/.exec(opt.slice(k)); if (m) k += m[0].length - 1; else k++; }
+      else if (d === 0 && '1aAiI'.includes(c)) {
+        const st = { 1: 'arabic', a: 'alph', A: 'Alph', i: 'roman', I: 'Roman' }[c];
+        return opt.slice(0, k) + '\\' + st + '*' + opt.slice(k + 1);
+      }
+    }
+    return opt;
+  }
+  list(kind, body, optStr, ctx, opts) {
+    const cmdRe = {
+      enum: 'item', item: 'item', desc: 'item', question: 'question|titledquestion|bonusquestion|bonustitledquestion', part: 'part|bonuspart',
+      subpart: 'subpart|bonussubpart', subsubpart: 'subsubpart|bonussubsubpart', choice: 'CorrectChoice|choice', checkbox: 'CorrectChoice|choice', task: 'task'
+    }[kind];
+    const re = new RegExp('^\\\\(' + cmdRe + ')(?![a-zA-Z])');
+    const parts = splitTop(body, (s, k) => { const m = re.exec(s.slice(k, k + 30)); return m ? m[0].length : 0; });
+    const lead = parts[0].text; // text before first item (e.g. \setcounter)
+    const kv = optStr ? parseKV(optStr) : new Map();
+    const depthKey = { enum: 'enumDepth', item: 'itemDepth' }[kind];
+    const depth = depthKey ? (ctx[depthKey] || 0) : 0;
+    const settings = this.D.settings;
+    let tpl;
+    if (kind === 'enum') {
+      const lvl = ['i', 'ii', 'iii', 'iv'][Math.min(depth, 3)];
+      tpl = ['\\arabic*.', '(\\alph*)', '\\roman*.', '\\Alph*.'][Math.min(depth, 3)];
+      if (settings['labelenum' + lvl]) tpl = settings['labelenum' + lvl].replace(/\\the(enum(i|ii|iii|iv))/g, () => settings['theenum' + lvl] || ['\\arabic*', '\\alph*', '\\roman*', '\\Alph*'][Math.min(depth, 3)]).replace(/\\(arabic|alph|Alph|roman|Roman)\s*\{enum[iv]+\}/g, '\\$1*');
+      else if (settings['theenum' + lvl]) tpl = (depth === 1 ? '(' : '') + settings['theenum' + lvl].replace(/\\(arabic|alph|Alph|roman|Roman)\s*\{enum[iv]+\}/g, '\\$1*') + (depth === 1 ? ')' : '.');
+    } else if (kind === 'item') {
+      tpl = ['\\textbullet', '\\textendash', '\\textasteriskcentered', '\\textperiodcentered'][Math.min(depth, 3)];
+      const lvl = ['i', 'ii', 'iii', 'iv'][Math.min(depth, 3)];
+      if (settings['labelitem' + lvl]) tpl = settings['labelitem' + lvl];
+    } else if (kind === 'question') tpl = settings.questionlabel ? settings.questionlabel.replace(/\\thequestion/g, '\\arabic*') : '\\arabic*.';
+    else if (kind === 'part') tpl = settings.partlabel ? settings.partlabel.replace(/\\thepartno/g, '\\alph*') : '(\\alph*)';
+    else if (kind === 'subpart') tpl = settings.subpartlabel ? settings.subpartlabel.replace(/\\thesubpart/g, '\\roman*') : '\\roman*.';
+    else if (kind === 'subsubpart') tpl = '\\greek*.';
+    else if (kind === 'choice') tpl = settings.choicelabel ? settings.choicelabel.replace(/\\thechoice/g, '\\Alph*') : '\\Alph*.';
+    else if (kind === 'checkbox') tpl = '\\ensuremath{\\bigcirc}';
+    else if (kind === 'task') tpl = '\\alph*)';
+    if (kind === 'desc') tpl = '';
+    if (kv.has('label')) tpl = String(kv.get('label'));
+    else if (optStr && kind === 'enum' && !/=/.test(optStr) && ![...kv.keys()].some(k => ENUMITEM_KEYS.has(k))) tpl = this.shortLabel(optStr);
+    else if (optStr && kind === 'task' && kv.has('label')) tpl = kv.get('label');
+    let n = kv.has('start') ? parseInt(kv.get('start'), 10) - 1 : 0;
+    if (kind === 'enum' && depth === 0 && (kv.has('resume') || kv.has('resume*'))) n = this.resumeEnum;
+    if (kind === 'question') n = this.cnt.question;
+    // \setcounter{enumi}{k} before first item
+    const lc = Object.assign({}, ctx); lc.enumSet = null;
+    let leadHtml = '';
+    if (lead.trim()) { leadHtml = this.inl(lead, lc); if (lc.enumSet != null) n = lc.enumSet; leadHtml = leadHtml.replace(/[\u0001-\u0007]/g, '').trim(); }
+    const childCtx = Object.assign({}, ctx, { top: false, examPart: kind === 'question' || kind === 'part' || kind === 'subpart' || ctx.examPart });
+    if (depthKey) childCtx[depthKey] = depth + 1;
+    const ans = this.showAnswers();
+    const items = [];
+    for (const p of parts.slice(1)) {
+      let t = p.text; const cmd = p.sep.replace(/^\\/, '');
+      let custom = null, pts = null, title = null;
+      if (cmd === 'titledquestion' || cmd === 'bonustitledquestion') { const a = readArg(t, 0); if (a) { title = a[0]; t = t.slice(a[1]); } }
+      const o = readOpt(t, 0);
+      if (o) { t = t.slice(o[1]); if (/question|part/.test(kind) || /question|part/.test(cmd)) pts = o[0]; else custom = o[0]; }
+      n++;
+      let label;
+      const correct = cmd === 'CorrectChoice';
+      if (custom != null) label = this.inlineFinal(custom, this.withStyle(ctx, kind === 'desc' ? { b: true } : {}));
+      else if (title != null) label = this.inlineFinal(title, ctx);
+      else if (kind === 'checkbox') label = ans && correct ? '\u25c9' : '\u25cb';
+      else label = this.inlineFinal(this.labelFromTemplate(tpl, n), ctx);
+      if (correct && ans) label = `<b class="correct">${label}</b>`;
+      if (/question|part/.test(kind)) { this.lastRef = this.fmtCounter(n, { question: 'arabic', part: 'alph', subpart: 'roman', subsubpart: 'greek' }[kind]); this.lastKind = kind; }
+      else if (kind === 'enum') { this.lastRef = label.replace(/<[^>]+>/g, '').replace(/[().]/g, ''); this.lastKind = 'item'; }
+      let ptsHtml = '';
+      if (pts != null && pts.trim() !== '' && !isNaN(parseFloat(pts))) {
+        const v = parseFloat(pts); this.cnt.points += v;
+        const pp = this.P.pointpoints || (this.P.pointname != null ? [this.P.pointname, this.P.pointname] : [' mark', ' marks']);
+        const word = (v === 1 ? pp[0] : pp[1]).replace(/^\\?\s*/, ' ').replace(/^ +/, ' ');
+        ptsHtml = `<span class="pts${this.P.pointsRight ? ' r' : ''}">(${v}${esc(word)})</span>`;
+      }
+      if (kind === 'question') this.cnt.question = n;
+      items.push({ label, t, ptsHtml, correct });
+    }
+    if (kind === 'enum' && depth === 0) this.resumeEnum = n;
+    const lm = kv.has('leftmargin') ? (kv.get('leftmargin') === '*' ? null : cssLen(kv.get('leftmargin'))) : null;
+    const nosep = kv.has('nosep') || kv.has('noitemsep') || /compact/.test(kind);
+    const wide = kind === 'desc' || kv.has('wide') || kv.has('leftmargin') && kv.get('leftmargin') === '0pt';
+    if (opts.inline) {
+      return '<div class="p inl-list">' + leadHtml + items.map(it => `<span class="ili"><span class="ilbl">${it.label}</span>\u00a0${this.inlineFinal(it.t, childCtx)}</span>`).join(' ') + '</div>';
+    }
+    if (kind === 'task' && opts.cols > 1) {
+      return leadHtml + `<div class="tasks" style="grid-template-columns:repeat(${opts.cols},1fr)">` + items.map(it => `<div class="it"><span class="lbl">${it.label}</span><div class="ib">${this.block(it.t, childCtx)}</div></div>`).join('') + '</div>';
+    }
+    const cls = `lst k-${kind}${nosep ? ' nosep' : ''}`;
+    let html = (leadHtml ? `<div class="p">${leadHtml}</div>` : '') + `<div class="${cls}"${lm ? ` style="--lm:${lm}"` : ''}>`;
+    for (const it of items) {
+      if (kind === 'desc') {
+        html += `<div class="it desc"><div class="ib">${this.paras(NOI + `<span class="dlbl">${it.label}</span> ` + this.inl(it.t, childCtx), false)}</div></div>`;
+      } else {
+        const bodyHtml = this.paras((this.P.pointsRight ? '' : it.ptsHtml + ' ') + this.inl(it.t, childCtx) + (this.P.pointsRight && it.ptsHtml ? HF + 'f' + it.ptsHtml : ''), false);
+        html += `<div class="it${it.correct && this.showAnswers() ? ' correct' : ''}"><span class="lbl">${it.label}</span><div class="ib">${bodyHtml || '&nbsp;'}</div></div>`;
+      }
+    }
+    return html + '</div>';
+  }
+
+  /* ---------- tables ---------- */
+  colSpec(spec) {
+    // expand *{n}{x}
+    for (let guard = 0; guard < 10 && /\*\s*\{/.test(spec); guard++) {
+      spec = spec.replace(/\*\s*\{\s*(\d+)\s*\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/, (a, k, x) => x.repeat(Math.min(+k, 60)));
+    }
+    const cols = []; let bars = 0, pend = null, i = 0;
+    while (i < spec.length) {
+      const c = spec[i];
+      if (c === '|') { bars++; i++; continue; }
+      if (c === ' ' || c === '\n' || c === '\t') { i++; continue; }
+      if (c === '@' || c === '!' || c === '<') { const a = readArg(spec, i + 1); i = a ? a[1] : i + 1; continue; }
+      if (c === '>') {
+        const a = readArg(spec, i + 1); i = a ? a[1] : i + 1;
+        if (a) { if (/\\centering/.test(a[0])) pend = 'c'; else if (/\\raggedleft/.test(a[0])) pend = 'r'; else if (/\\raggedright/.test(a[0])) pend = 'l'; if (/\\bfseries/.test(a[0])) pend = (pend || '') + 'B'; }
+        continue;
+      }
+      let col = null;
+      if ('lcrS'.includes(c)) { col = { al: c === 'S' ? 'c' : c }; i++; }
+      else if ('LCRJ'.includes(c)) { col = { al: c === 'J' ? 'l' : c.toLowerCase() }; i++; }
+      else if ('pmb'.includes(c)) { const a = readArg(spec, i + 1); col = { al: 'p', va: { p: 'top', m: 'middle', b: 'bottom' }[c], w: a ? cssLen(a[0]) : null }; i = a ? a[1] : i + 1; }
+      else if (c === 'X' || c === 'Y' || c === 'Z') { col = { al: c === 'Y' || c === 'Z' ? 'c' : 'p', flex: true }; i++; if (spec[i] === '[') { const o = readOpt(spec, i); if (o) i = o[1]; } }
+      else if (c === 'w' || c === 'W') { const a = readArg(spec, i + 1); const b = a ? readArg(spec, a[1]) : null; col = { al: a ? a[0].trim() : 'l', w: b ? cssLen(b[0]) : null }; i = b ? b[1] : i + 1; }
+      else if (c === 'D') { const a = readArg(spec, i + 1); const b = a && readArg(spec, a[1]); const d = b && readArg(spec, b[1]); col = { al: 'c' }; i = d ? d[1] : i + 1; }
+      else if (c === 'Q') { const o = readOpt(spec, i + 1); col = { al: 'l' }; i = o ? o[1] : i + 1; if (o) { const kv = parseKV(o[0]); if (kv.has('c')) col.al = 'c'; if (kv.has('r')) col.al = 'r'; } }
+      else { i++; continue; }
+      col.lb = bars; bars = 0;
+      if (pend) { if (/[lcr]/.test(pend[0])) col.al2 = pend[0]; if (pend.includes('B')) col.bold = true; pend = null; }
+      cols.push(col);
+    }
+    if (cols.length) cols[cols.length - 1].rb = bars;
+    return cols;
+  }
+  table(spec, body, ctx, opts) {
+    const cols = this.colSpec(spec);
+    const stretch = parseFloat(this.D.settings.arraystretch) || 1;
+    // split rows
+    const rowsRaw = splitTop(body, (s, i) => {
+      if (s[i] === '\\' && s[i + 1] === '\\') return 2;
+      if (s.startsWith('\\tabularnewline', i)) return 15;
+      if (s.startsWith('\\cr', i) && !/[a-zA-Z]/.test(s[i + 3] || '')) return 3;
+      return 0;
+    }).map(p => p.text);
+    const rows = [];
+    let pendingTop = [];
+    const ruleRe = /^\s*(\\hline|\\toprule|\\midrule|\\bottomrule|\\cline|\\cmidrule|\\hhline|\\specialrule|\\noalign|\\rowcolor|\\addlinespace|\\endhead|\\endfirsthead|\\endfoot|\\endlastfoot|\\morecmidrules|\\hdashline|\\Hline|\\caption|\\label|\\centering|\\small|\\footnotesize|\\rowcolors|\\arrayrulecolor|\\hlinewd)(?![a-zA-Z])/;
+    for (let raw of rowsRaw) {
+      // optional [len] after \\
+      const o = /^\s*\[([^\]]*)\]/.exec(raw); let extra = null;
+      if (o) { extra = cssLen(o[1]); raw = raw.slice(o[0].length); }
+      if (extra && rows.length) rows[rows.length - 1].extra = extra;
+      let rules = pendingTop; pendingTop = []; let rowColor = null; let caption = null;
+      let m;
+      while ((m = ruleRe.exec(raw))) {
+        const c = m[1]; let k = m[0].length;
+        if (c === '\\hline' || c === '\\Hline' || c === '\\hdashline') rules.push({ t: c === '\\hdashline' ? 'dash' : 'h' });
+        else if (c === '\\toprule' || c === '\\bottomrule') { const oo = readOpt(raw, k); if (oo) k = oo[1]; rules.push({ t: 'heavy' }); }
+        else if (c === '\\midrule') { const oo = readOpt(raw, k); if (oo) k = oo[1]; rules.push({ t: 'mid' }); }
+        else if (c === '\\cline' || c === '\\cmidrule') {
+          if (raw[k] === '(') { const e = raw.indexOf(')', k); k = e + 1; }
+          const oo = readOpt(raw, k); if (oo) k = oo[1];
+          const a = readArg(raw, k); if (a) { k = a[1]; const mm = /(\d+)\s*-\s*(\d+)/.exec(a[0]); if (mm) rules.push({ t: c === '\\cline' ? 'h' : 'mid', from: +mm[1], to: +mm[2] }); }
+        }
+        else if (c === '\\hhline') { const a = readArg(raw, k); if (a) { k = a[1]; rules.push({ t: /=/.test(a[0]) ? 'dbl' : 'h' }); } }
+        else if (c === '\\specialrule') { for (let q = 0; q < 3; q++) { const a = readArg(raw, k); if (a) k = a[1]; } rules.push({ t: 'heavy' }); }
+        else if (c === '\\noalign' || c === '\\arrayrulecolor' || c === '\\hlinewd') { const a = readArg(raw, k); if (a) k = a[1]; }
+        else if (c === '\\rowcolor') { const oo = readOpt(raw, k); if (oo) k = oo[1]; const a = readArg(raw, k); if (a) { k = a[1]; rowColor = parseColor(a[0], this.D.colors); } const oo2 = readOpt(raw, k); if (oo2) k = oo2[1]; }
+        else if (c === '\\rowcolors') { for (let q = 0; q < 3; q++) { const a = readArg(raw, k); if (a) k = a[1]; } }
+        else if (c === '\\addlinespace') { const oo = readOpt(raw, k); if (oo) k = oo[1]; rules.push({ t: 'space' }); }
+        else if (c === '\\caption') { const a = readArg(raw, k); if (a) { k = a[1]; caption = a[0]; } }
+        else if (c === '\\label') { const a = readArg(raw, k); if (a) { k = a[1]; } }
+        raw = raw.slice(k);
+      }
+      if (caption != null) rows.push({ caption });
+      // double hline
+      if (!raw.trim()) { pendingTop = rules; continue; }
+      const cells = splitTop(raw, (s, i) => s[i] === '&' ? 1 : 0).map(p => p.text);
+      rows.push({ cells, rules, rowColor });
+    }
+    const bottom = pendingTop;
+    // build
+    const occupied = {}; // rowspan tracking: col index -> remaining rows
+    let html = '';
+    let rIdx = 0;
+    let capHtml = '';
+    const dataRows = rows.filter(r => !r.caption);
+    rows.filter(r => r.caption).forEach(r => { capHtml += this.caption('table', false, r.caption, ctx, false).replace(/[\u0002\u0003]b?/g, ''); });
+    dataRows.forEach((row, ri) => {
+      const isLast = ri === dataRows.length - 1;
+      let tr = `<tr${row.rowColor ? ` style="background:${rgbCss(row.rowColor)}"` : ''}>`;
+      let ci = 0; // column index
+      for (let k = 0; k < row.cells.length; k++) {
+        if (occupied[ci] > 0) { occupied[ci]--; ci++; continue; }
+        let cell = row.cells[k]; let span = 1, rspan = 1; let col = cols[ci] || { al: 'l' }; let lb = col.lb, rb = (ci + 1 === cols.length || (cols[ci + 1] && false)) ? cols[ci].rb : 0;
+        const mc = /^\s*\\multicolumn\s*/.exec(cell);
+        let al = col.al2 || col.al, w = col.w, va = col.va, bold = col.bold;
+        if (mc) {
+          let p = mc[0].length; const a = readArg(cell, p); const b = readArg(cell, a[1]); const c = readArg(cell, b[1]);
+          span = parseInt(a[0], 10) || 1; const cs = this.colSpec(b[0]); const cc = cs[0] || { al: 'c' };
+          al = cc.al2 || cc.al; w = cc.w; va = cc.va; lb = cc.lb || 0; rb = cc.rb || 0;
+          cell = c[0] + cell.slice(c[1]);
+        } else {
+          rb = cols[ci] ? (cols[ci].rb || 0) : 0;
+        }
+        const mr = /^\s*\\multirow\s*/.exec(cell);
+        if (mr) {
+          let p = mr[0].length; const oo = readOpt(cell, p); if (oo) p = oo[1];
+          const a = readArg(cell, p); const oo2 = readOpt(cell, a[1]); let q = oo2 ? oo2[1] : a[1]; const b = readArg(cell, q); const oo3 = readOpt(cell, b[1]); q = oo3 ? oo3[1] : b[1]; const c = readArg(cell, q);
+          rspan = Math.max(1, parseInt(a[0], 10) || 1);
+          cell = c[0] + cell.slice(c[1]);
+          for (let z = 0; z < span; z++) occupied[ci + z] = (occupied[ci + z] || 0) + rspan - 1;
+          va = 'middle';
+        }
+        // \cellcolor
+        let bg = null;
+        cell = cell.replace(/\\cellcolor\s*(\[[^\]]*\])?\s*\{([^}]*)\}/, (a2, mo, cname) => { bg = mo ? colorFromModel(mo.slice(1, -1), cname) : parseColor(cname, this.D.colors); return ''; });
+        // borders
+        const bt = [];
+        const topRule = (row.rules || []).filter(r => r.from == null || (ci + 1 <= r.to && ci + span >= r.from));
+        let cssT = '';
+        if (topRule.length) {
+          const t = topRule.map(r => r.t);
+          if (t.filter(x => x === 'h').length >= 2 || t.includes('dbl')) cssT = 'border-top:3px double currentColor;';
+          else if (t.includes('heavy')) cssT = 'border-top:0.08em solid currentColor;';
+          else if (t.includes('h')) cssT = 'border-top:0.4pt solid currentColor;';
+          else if (t.includes('mid')) cssT = 'border-top:0.05em solid currentColor;';
+          else if (t.includes('dash')) cssT = 'border-top:0.4pt dashed currentColor;';
+          if (t.includes('space')) cssT += 'padding-top:0.5em;';
+        }
+        let cssB = '';
+        if (isLast && bottom.length) {
+          const t = bottom.map(r => r.t);
+          if (t.filter(x => x === 'h').length >= 2 || t.includes('dbl')) cssB = 'border-bottom:3px double currentColor;';
+          else if (t.includes('heavy')) cssB = 'border-bottom:0.08em solid currentColor;';
+          else if (t.includes('h') || t.includes('mid')) cssB = 'border-bottom:0.4pt solid currentColor;';
+        }
+        const vb = (n2) => n2 >= 2 ? '3px double currentColor' : '0.4pt solid currentColor';
+        let st = `text-align:${{ l: 'left', c: 'center', r: 'right', p: 'left' }[al] || 'left'};` + cssT + cssB;
+        if (lb) st += `border-left:${vb(lb)};`;
+        if (rb) st += `border-right:${vb(rb)};`;
+        if (w && w !== 'fill') st += `width:${w};`;
+        if (va) st += `vertical-align:${va};`;
+        if (bg) st += `background:${rgbCss(bg)};`;
+        if (stretch !== 1) st += `padding-top:${(0.1 * stretch + (stretch - 1) * 0.25).toFixed(2)}em;padding-bottom:${(0.1 * stretch + (stretch - 1) * 0.25).toFixed(2)}em;`;
+        if (row.extra) st += `padding-bottom:${row.extra};`;
+        const cctx = bold ? this.withStyle(ctx, { b: true }) : Object.assign({}, ctx);
+        const inner = (al === 'p' || w) ? this.block(cell, Object.assign({}, cctx, { top: false })) : this.inlineFinal(cell.trim(), cctx);
+        tr += `<td${span > 1 ? ` colspan="${span}"` : ''}${rspan > 1 ? ` rowspan="${rspan}"` : ''} style="${st}"${(al === 'p' || w) ? ' class="pc"' : ''}>${inner}</td>`;
+        ci += span;
+      }
+      // fill missing cells to keep vertical rules
+      while (ci < cols.length) {
+        if (occupied[ci] > 0) { occupied[ci]--; ci++; continue; }
+        const col = cols[ci];
+        const topRule = (row.rules || []).filter(r => r.from == null || (ci + 1 <= r.to && ci + 1 >= r.from));
+        let st = topRule.length ? 'border-top:0.4pt solid currentColor;' : '';
+        if (isLast && bottom.length) st += 'border-bottom:0.4pt solid currentColor;';
+        if (col.lb) st += `border-left:0.4pt solid currentColor;`;
+        if (col.rb) st += `border-right:0.4pt solid currentColor;`;
+        tr += `<td style="${st}"></td>`; ci++;
+      }
+      html += tr + '</tr>';
+      rIdx++;
+    });
+    const tw = opts.width && opts.width !== 'fill' ? `width:${opts.width};` : '';
+    const flexCols = cols.some(c => c.flex);
+    return (capHtml ? BS + 'b' + capHtml + BE : '') + `<table class="tab${flexCols ? ' flex' : ''}" style="${tw}${flexCols && !tw ? 'width:100%;' : ''}">${html}</table>`;
+  }
+}
+
+function convert(main, files, opts) {
+  const c = new Conv(opts);
+  return c.convert(main, files);
+}
+const api = { convert, siExpand, siUnit, siNum, expandMacros, extractDefs, cssLen, parseColor, stripComments, Conv };
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+else root.L2H = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(() => {
+'use strict';
+const $ = (id) => document.getElementById(id);
+const PAPER = { a4: [21, 29.7], a3: [29.7, 42], a5: [14.8, 21], b5: [17.6, 25], letter: [21.59, 27.94], legal: [21.59, 35.56] };
+const IMG_EXT = ['', '.pdf', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.PDF', '.PNG', '.JPG', '.JPEG'];
+const state = { texts: {}, images: {}, imgInfo: {}, main: null, name: 'document', result: null, timer: null, renderSeq: 0 };
+
+/* ---------------- file loading ---------------- */
+const fileIn = $('fileIn'), drop = $('drop');
+drop.addEventListener('click', () => fileIn.click());
+drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } });
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+fileIn.addEventListener('change', () => { addFiles(fileIn.files); fileIn.value = ''; });
+$('addBtn').addEventListener('click', () => fileIn.click());
+// allow dropping files anywhere once open
+document.addEventListener('dragover', (e) => { if (!$('work').hidden) e.preventDefault(); });
+document.addEventListener('drop', (e) => { if (!$('work').hidden && e.dataTransfer && e.dataTransfer.files.length && !drop.contains(e.target)) { e.preventDefault(); addFiles(e.dataTransfer.files); } });
+
+const isText = (n) => /\.(tex|sty|cls|bib|txt|ltx|bbl|def|cfg)$/i.test(n);
+const isImg = (n) => /\.(png|jpe?g|gif|svg|webp|pdf|eps|ps)$/i.test(n);
+const base = (p) => String(p).replace(/\\/g, '/').split('/').pop();
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); });
+}
+let zipLib = null, pdfLib = null;
+const getZip = () => zipLib || (zipLib = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'));
+const getPdf = () => pdfLib || (pdfLib = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(() => {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}));
+
+async function addFiles(list) {
+  $('loadMsg').textContent = '';
+  const files = [...list];
+  if (!files.length) return;
+  let newTex = [];
+  try {
+    for (const f of files) {
+      if (/\.zip$/i.test(f.name)) {
+        await getZip();
+        const z = await JSZip.loadAsync(f);
+        for (const path of Object.keys(z.files)) {
+          const e = z.files[path];
+          if (e.dir || /(^|\/)__MACOSX\//.test(path) || /(^|\/)\./.test(path)) continue;
+          const nm = base(path);
+          if (isText(nm)) { state.texts[nm] = await e.async('string'); if (/\.tex$/i.test(nm)) newTex.push(nm); }
+          else if (isImg(nm)) await addImage(nm, await e.async('blob'));
+        }
+        if (state.name === 'document') state.name = f.name.replace(/\.zip$/i, '');
+      } else if (isText(f.name)) {
+        state.texts[f.name] = await f.text();
+        if (/\.(tex|ltx)$/i.test(f.name)) newTex.push(f.name);
+      } else if (isImg(f.name)) {
+        await addImage(f.name, f);
+      } else {
+        $('loadMsg').textContent = `"${f.name}" is not a file this tool can use.`;
+      }
+    }
+  } catch (err) {
+    $('loadMsg').textContent = 'Could not read the files: ' + (err.message || err);
+    return;
+  }
+  // choose main file
+  const texNames = Object.keys(state.texts).filter(n => /\.(tex|ltx)$/i.test(n));
+  if (!state.main || !state.texts[state.main]) {
+    const withClass = texNames.filter(n => /\\documentclass/.test(state.texts[n]));
+    const pick = withClass.find(n => /^main\.tex$/i.test(n)) || withClass.find(n => newTex.includes(n)) || withClass[0] || newTex[0] || texNames[0];
+    if (pick) setMain(pick);
+  }
+  if (!state.main && Object.keys(state.images).length && $('work').hidden) {
+    $('loadMsg').textContent = 'Add the .tex file too — images on their own can\'t be converted.';
+    return;
+  }
+  refreshMainSel();
+  if (state.main) { openWork(); scheduleRender(0); }
+}
+async function addImage(name, blob) {
+  const nm = base(name);
+  state.images[nm] = blob;
+  delete state.imgInfo[nm];
+  try { state.imgInfo[nm] = await imageInfo(nm, blob); }
+  catch (e) { state.imgInfo[nm] = { error: 'Could not read image ' + nm }; }
+}
+async function imageInfo(nm, blob) {
+  if (/\.(eps|ps)$/i.test(nm)) return { error: 'EPS image "' + nm + '" can\'t be shown — convert it to PDF or PNG' };
+  if (/\.pdf$/i.test(nm)) {
+    await getPdf();
+    const data = new Uint8Array(await blob.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const page = await pdf.getPage(1);
+    const vp1 = page.getViewport({ scale: 1 });
+    const scale = Math.min(4, 2400 / Math.max(vp1.width, vp1.height));
+    const vp = page.getViewport({ scale: Math.max(2, scale) });
+    const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const url = c.toDataURL('image/png');
+    pdf.destroy();
+    return { url, wpt: vp1.width, hpt: vp1.height };
+  }
+  const url = URL.createObjectURL(blob);
+  const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res([im.naturalWidth, im.naturalHeight]); im.onerror = () => res([300, 200]); im.src = url; });
+  return { url, wpt: dim[0] * 0.75, hpt: dim[1] * 0.75 };
+}
+function findImage(file) {
+  const nm = base(file.trim());
+  for (const ext of IMG_EXT) {
+    const k = nm + ext;
+    if (state.imgInfo[k]) return state.imgInfo[k];
+    const kk = Object.keys(state.imgInfo).find(x => x.toLowerCase() === k.toLowerCase());
+    if (kk) return state.imgInfo[kk];
+  }
+  return null;
+}
+function setMain(n) {
+  state.main = n;
+  if (state.name === 'document' || /\.(tex|ltx)$/i.test(state.name + '.tex')) state.name = n.replace(/\.(tex|ltx)$/i, '');
+  $('src').value = state.texts[n];
+}
+function refreshMainSel() {
+  const texNames = Object.keys(state.texts).filter(n => /\.(tex|ltx)$/i.test(n));
+  const sel = $('mainSel');
+  $('mainWrap').hidden = texNames.length < 2;
+  sel.innerHTML = texNames.map(n => `<option${n === state.main ? ' selected' : ''}>${escH(n)}</option>`).join('');
+  const nImg = Object.keys(state.images).length;
+  $('fname').textContent = state.main || '';
+  const others = texNames.length - 1;
+  $('fmeta').textContent = [others > 0 ? `${others} other .tex file${others > 1 ? 's' : ''}` : '', nImg ? `${nImg} image${nImg > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') || 'No images added';
+}
+$('mainSel').addEventListener('change', () => { setMain($('mainSel').value); refreshMainSel(); scheduleRender(0); });
+const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function openWork() {
+  $('loadCard').hidden = true; $('work').hidden = false;
+  if (window.innerWidth < 900) { $('split').classList.add('nosrc'); $('srcBtn').textContent = 'Show source'; }
+  fitSheet();
+}
+$('sampleBtn').addEventListener('click', () => { state.texts['sample.tex'] = SAMPLE; state.name = 'sample'; setMain('sample.tex'); refreshMainSel(); openWork(); scheduleRender(0); });
+$('blankBtn').addEventListener('click', () => {
+  state.texts['document.tex'] = '\\documentclass{article}\n\\usepackage{amsmath}\n\n\\begin{document}\n\nType or paste your LaTeX here.\n\n\\end{document}\n';
+  state.name = 'document'; setMain('document.tex'); refreshMainSel(); openWork(); scheduleRender(0);
+  $('split').classList.remove('nosrc'); $('srcBtn').textContent = 'Hide source'; $('src').focus();
+});
+$('srcBtn').addEventListener('click', () => {
+  const on = $('split').classList.toggle('nosrc');
+  $('srcBtn').textContent = on ? 'Show source' : 'Hide source';
+  fitSheet();
+});
+$('src').addEventListener('input', () => { if (state.main) state.texts[state.main] = $('src').value; scheduleRender(700); });
+$('src').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') { e.preventDefault(); const t = e.target; const a = t.selectionStart, b = t.selectionEnd; t.setRangeText('  ', a, b, 'end'); t.dispatchEvent(new Event('input')); }
+});
+['paperSel', 'marginSel', 'fontSel', 'sizeSel', 'ansChk', 'numChk'].forEach(id => $(id).addEventListener('change', () => scheduleRender(0)));
+
+/* ---------------- render ---------------- */
+function scheduleRender(ms) { clearTimeout(state.timer); state.timer = setTimeout(render, ms); }
+function layout(P) {
+  const paper = $('paperSel').value === 'auto' ? P.paper : $('paperSel').value;
+  let [w, h] = PAPER[paper] || PAPER.a4; if (P.landscape) [w, h] = [h, w];
+  let m;
+  const mv = $('marginSel').value;
+  if (mv !== 'auto') m = { t: mv, b: mv, l: mv, r: mv };
+  else {
+    const M = P.margins || {};
+    let side, top = '3cm', bot = '3cm';
+    if (P.exam) { side = '2.54cm'; top = '2.54cm'; bot = '2.54cm'; }
+    else {
+      const tw = { 10: 12.17, 11: 12.65, 12: 13.7 }[P.fontPt] || 12.17;
+      side = (Math.max(1.5, (w - tw) / 2)).toFixed(2) + 'cm'; top = '3.2cm'; bot = '3.6cm';
+    }
+    m = { t: M.t || top, b: M.b || bot, l: M.l || side, r: M.r || side };
+  }
+  const size = $('sizeSel').value === 'auto' ? (P.fontPt || 10) : +$('sizeSel').value;
+  const fam = $('fontSel').value === 'auto' ? ({ serif: 'cm', times: 'times', sans: 'sans' }[P.family] || 'cm') : $('fontSel').value;
+  return { paper, w, h, m, size, fam };
+}
+function applyLayout(doc, L, P) {
+  doc.className = 'doc sheet ff-' + L.fam;
+  doc.style.setProperty('--fs', L.size + 'pt');
+  const pi = P.parindent != null ? P.parindent : ({ 10: '15pt', 11: '17pt', 12: '1.5em' }[L.size] || '1.5em');
+  doc.style.setProperty('--pi', pi);
+  doc.style.setProperty('--ps', P.parskip || '0');
+  doc.style.setProperty('--lh', (1.25 * (P.linespread || 1)).toFixed(3));
+  doc.style.setProperty('--ml', L.m.l); doc.style.setProperty('--mr', L.m.r);
+  doc.style.width = L.w + 'cm';
+  doc.style.minHeight = L.h + 'cm';
+  doc.style.padding = `${L.m.t} ${L.m.r} ${L.m.b} ${L.m.l}`;
+}
+function render() {
+  const src = $('src').value;
+  if (!window.L2H) return;
+  const seq = ++state.renderSeq;
+  const missing = new Set();
+  let r;
+  try {
+    r = L2H.convert(src, state.texts, { katex: window.katex, showAnswers: state.ansTouched ? $('ansChk').checked : null, findImage, missingImages: missing });
+  } catch (err) {
+    console.error(err);
+    $('notes').innerHTML = `<h2>Notes</h2><div class="msg err">The converter stopped with an error: ${escH(err.message || err)}. Check the source near where you last edited.</div>`;
+    return;
+  }
+  state.result = r;
+  const P = r.P;
+  // answers toggle
+  const examish = P.exam || /\\begin\{solution|\\CorrectChoice|\\fillin/.test(src);
+  $('ansWrap').hidden = !examish;
+  if (!state.ansTouched) $('ansChk').checked = !!P.answers;
+  const L = layout(P);
+  state.layout = L;
+  const doc = $('doc');
+  applyLayout(doc, L, P);
+  doc.innerHTML = r.html;
+  doc.setAttribute('lang', P.cjk ? 'zh-Hant' : 'en');
+  fitSheet();
+  renderTikz(doc, r, P, seq);
+  showNotes(r, missing);
+  $('prevSt').textContent = `${L.paper.toUpperCase()}${P.landscape ? ' landscape' : ''} · ${L.size} pt`;
+}
+$('ansChk').addEventListener('change', () => { state.ansTouched = true; });
+
+function fitSheet() {
+  const desk = $('desk'), doc = $('doc');
+  if (!doc.style.width) return;
+  const avail = desk.clientWidth - (window.innerWidth < 900 ? 20 : 36);
+  const cm = parseFloat(doc.style.width);
+  const px = cm * 96 / 2.54;
+  const z = Math.min(1.4, avail / px);
+  doc.style.zoom = z > 0 ? z.toFixed(4) : 1;
+}
+window.addEventListener('resize', () => fitSheet());
+
+/* ---------------- notes ---------------- */
+function showNotes(r, missing) {
+  const ws = r.warnings.filter(w => !/^Missing image/.test(w.msg));
+  let h = '<h2>Notes</h2>';
+  if (missing.size) {
+    h += `<div class="msg warn">Missing image${missing.size > 1 ? 's' : ''}: ${[...missing].map(m => '<b>' + escH(m) + '</b>').join(', ')}. <button class="link" onclick="document.getElementById('fileIn').click()">Add image files</button></div>`;
+  }
+  if (!ws.length && !missing.size) h += '<div class="good">✓ Everything in the file was converted.</div>';
+  else if (ws.length) h += '<ul>' + ws.slice(0, 60).map(w => `<li>${escH(w.msg)}${w.n > 1 ? ` <span class="n">×${w.n}</span>` : ''}</li>`).join('') + '</ul>' + (ws.length > 60 ? `<div class="hint">…and ${ws.length - 60} more</div>` : '');
+  $('notes').innerHTML = h;
+}
+
+/* ---------------- TikZ ---------------- */
+const TZ = { cache: new Map(), pending: new Map(), loaded: null, failed: null };
+const TZ_VER = '1.6.0';
+const TZ_BASE = `https://cdn.jsdelivr.net/npm/@rod2ik/tikzjax@${TZ_VER}/dist/`;
+function loadTikzEngine() {
+  if (TZ.loaded) return TZ.loaded;
+  window.TikzJaxOptions = Object.assign({}, window.TikzJaxOptions || {}, {
+    renderTimeout: 90000, maxRetries: 1,
+    theme: { followSystemTheme: false, fallbackTheme: 'light', applyTargetStyles: false, adaptiveColors: { enabled: false } }
+  });
+  const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = TZ_BASE + 'fonts.min.css'; document.head.appendChild(l);
+  TZ.loaded = loadScript(TZ_BASE + 'tikzjax.min.js').catch(e => { TZ.failed = e; throw e; });
+  return TZ.loaded;
+}
+function hash(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
+function tikzJob(item, P) {
+  const src = item.src.trim();
+  const pk = {};
+  if ((P.circuitikz != null && /circuitikz|\bto\s*\[/.test(src)) || /circuitikz|\bto\s*\[\s*(R|C|L|battery|battery1|V|I|american|european|lamp|short|open|D|led|sV|vR|ammeter|voltmeter|rmeter|cute inductor|switch|nos|ncs|spst|bulb)/.test(src)) pk.circuitikz = P.circuitikz || '';
+  if (/\\chemfig/.test(src)) pk.chemfig = '';
+  if (/\\(vb|dv|pdv|qty|abs)\b/.test(src) && P.pkgs && P.pkgs.has('physics')) pk.physics = '';
+  const libs = [...(P.tikzLibs || [])].filter(x => !/^(external)$/.test(x));
+  const pre = (P.tikzPre || []).join('\n');
+  const key = hash(JSON.stringify([src, pk, libs, pre]));
+  return { key, src, pk, libs, pre };
+}
+function runTikz(job) {
+  if (TZ.cache.has(job.key)) return Promise.resolve(TZ.cache.get(job.key));
+  if (TZ.pending.has(job.key)) return TZ.pending.get(job.key);
+  const p = loadTikzEngine().then(() => new Promise((resolve, reject) => {
+    const box = document.createElement('div');
+    const sc = document.createElement('script');
+    sc.type = 'text/tikz';
+    const pkNames = Object.keys(job.pk);
+    if (pkNames.length) sc.setAttribute('data-tex-packages', JSON.stringify(job.pk));
+    if (job.libs.length) sc.setAttribute('data-tikz-libraries', job.libs.join(','));
+    if (job.pre) sc.setAttribute('data-add-to-preamble', job.pre);
+    sc.textContent = job.src;
+    box.appendChild(sc);
+    $('tzStage').appendChild(box);
+    let done = false;
+    const finish = (ok, val) => { if (done) return; done = true; obs.disconnect(); clearTimeout(t); box.remove(); ok ? resolve(val) : reject(val); };
+    const check = () => {
+      const svg = box.querySelector('svg');
+      if (svg && svg.querySelector('path, text, g, use, line, rect, circle, polyline, polygon')) { finish(true, svg.outerHTML); return true; }
+      const err = box.querySelector('img, .tikzjax-error, [data-tikzjax-error]');
+      if (err && !box.querySelector('script[type="text/tikz"]')) { finish(false, new Error('TeX could not draw this diagram')); return true; }
+      return false;
+    };
+    const obs = new MutationObserver(() => check());
+    obs.observe(box, { childList: true, subtree: true, attributes: true });
+    const t = setTimeout(() => finish(false, new Error('Timed out drawing the diagram')), 150000);
+    setTimeout(check, 50);
+  })).then(svg => { TZ.cache.set(job.key, svg); TZ.pending.delete(job.key); return svg; }, err => { TZ.pending.delete(job.key); throw err; });
+  TZ.pending.set(job.key, p);
+  return p;
+}
+function renderTikz(doc, r, P, seq) {
+  const els = [...doc.querySelectorAll('.tikz[data-i]')];
+  $('tzMsg').textContent = '';
+  if (!els.length) { updateTzStatus(); return; }
+  if (r.tikz.some(t => /\\begin\{axis\}/.test(t.src))) {
+    $('tzMsg').textContent = 'pgfplots graphs (axis environment) are not supported by the in-browser diagram engine.';
+  }
+  els.forEach(el => {
+    const item = r.tikz[+el.dataset.i]; if (!item) return;
+    const job = tikzJob(item, P);
+    el.dataset.key = job.key;
+    if (TZ.cache.has(job.key)) { el.innerHTML = TZ.cache.get(job.key); return; }
+    el.classList.add('tz-pending');
+    runTikz(job).then(svg => {
+      document.querySelectorAll(`#doc .tikz[data-key="${job.key}"]`).forEach(e => { e.innerHTML = svg; e.classList.remove('tz-pending'); });
+      updateTzStatus();
+    }, err => {
+      document.querySelectorAll(`#doc .tikz[data-key="${job.key}"]`).forEach(e => {
+        e.classList.remove('tz-pending');
+        e.innerHTML = `<span class="tz-err">Diagram not drawn: ${escH(TZ.failed ? 'the diagram engine could not be downloaded (check your internet connection)' : err.message)}.</span>`;
+      });
+      updateTzStatus();
+    });
+  });
+  updateTzStatus();
+}
+function updateTzStatus() {
+  const all = document.querySelectorAll('#doc .tikz').length;
+  const pend = document.querySelectorAll('#doc .tikz.tz-pending').length;
+  const base = $('prevSt').textContent.replace(/ · Drawing.*$| · \d+ diagrams?$/, '');
+  $('prevSt').textContent = base + (pend ? ` · Drawing diagrams… ${all - pend}/${all}` : '');
+}
+
+/* ---------------- print ---------------- */
+$('pdfBtn').addEventListener('click', () => {
+  const pend = document.querySelectorAll('#doc .tikz.tz-pending').length;
+  if (pend && !confirm(`${pend} diagram${pend > 1 ? 's are' : ' is'} still being drawn. Save the PDF anyway?`)) return;
+  const L = state.layout; const P = state.result ? state.result.P : {};
+  if (!L) return;
+  const nums = $('numChk').checked && P.pagestyle !== 'empty';
+  const fam = { cm: '"KaTeX_Main", "Times New Roman", serif', times: '"Times New Roman", Times, serif', sans: 'Helvetica, Arial, sans-serif' }[L.fam];
+  $('pageStyle').textContent = `@media print { @page { size: ${L.w}cm ${L.h}cm; margin: ${L.m.t} ${L.m.r} ${L.m.b} ${L.m.l};
+    ${nums ? `@bottom-center { content: counter(page); font-family: ${fam}; font-size: ${L.size}pt; vertical-align: top; padding-top: 0.8cm; }` : ''} } }`;
+  const pr = $('print'); pr.innerHTML = '';
+  const clone = $('doc').cloneNode(true);
+  clone.id = 'docPrint'; clone.classList.remove('sheet');
+  clone.style.zoom = '1'; clone.style.padding = '0'; clone.style.width = 'auto'; clone.style.minHeight = '0';
+  pr.appendChild(clone);
+  const oldTitle = document.title;
+  document.title = state.name || 'document';
+  const restore = () => { document.title = oldTitle; pr.innerHTML = ''; window.removeEventListener('afterprint', restore); };
+  window.addEventListener('afterprint', restore);
+  setTimeout(() => window.print(), 60);
+});
+
+/* ---------------- sample ---------------- */
+const SAMPLE = "\\documentclass[11pt]{article}\n\\usepackage[a4paper, margin=2cm]{geometry}\n\\usepackage{amsmath, amssymb}\n\\usepackage{siunitx}\n\\usepackage{enumitem}\n\\usepackage{booktabs}\n\\usepackage{xeCJK}\n\\usepackage{circuitikz}\n\\usetikzlibrary{arrows.meta}\n\n\\newcommand{\\marks}[1]{\\hfill(#1 marks)}\n\\newcommand{\\vel}{\\vec{v}}\n\n\\title{F.5 Physics Test: Electricity \\\\ 中五物理測驗：電學}\n\\author{Physics Department}\n\\date{October 2026}\n\n\\begin{document}\n\\maketitle\n\n\\section*{Instructions 考生須知}\n\\begin{itemize}\n  \\item Answer \\textbf{ALL} questions. 回答\\textbf{所有}問題。\n  \\item Take $g = \\SI{9.81}{\\metre\\per\\second\\squared}$ and $e = \\num{1.60e-19}$~C.\n\\end{itemize}\n\n\\section{Multiple choice}\n\n\\begin{enumerate}\n  \\item A \\SI{12}{\\volt} battery drives a current of \\SI{0.5}{\\ampere} through a resistor.\n  What is the resistance?\n  \\begin{enumerate}[label=\\Alph*.]\n    \\item \\SI{6}{\\ohm}\n    \\item \\SI{12}{\\ohm}\n    \\item \\SI{24}{\\ohm}\n    \\item \\SI{48}{\\ohm}\n  \\end{enumerate}\n\n  \\item 下列哪一個是電功率的單位？\n  \\begin{enumerate}[label=\\Alph*.]\n    \\item J \\quad B. \\SI{}{\\watt} (wrongly typed on purpose)\n    \\item \\si{\\kilo\\watt\\hour}\n  \\end{enumerate}\n\\end{enumerate}\n\n\\section{Structured questions}\n\n\\begin{enumerate}[resume]\n  \\item The circuit below shows two resistors in series with a cell of e.m.f.\\ $\\varepsilon$.\n\n  \\begin{center}\n  \\begin{circuitikz}\n    \\draw (0,0) to[battery1, l=$\\varepsilon$] (0,3)\n          to[R, l=$R_1$] (4,3)\n          to[R, l=$R_2$] (4,0) -- (0,0);\n  \\end{circuitikz}\n  \\end{center}\n\n  \\begin{enumerate}[label=(\\alph*)]\n    \\item Show that the current $I$ is given by\n    \\begin{equation}\n      I = \\frac{\\varepsilon}{R_1 + R_2}. \\label{eq:current}\n    \\end{equation}\n    \\marks{2}\n    \\item Hence, using \\eqref{eq:current}, find the power dissipated in $R_1$ when\n    $\\varepsilon = \\SI{6.0}{\\volt}$, $R_1 = \\SI{4.0}{\\ohm}$ and $R_2 = \\SI{8.0}{\\ohm}$. \\marks{3}\n\n    \\vspace{3cm}\n  \\end{enumerate}\n\n  \\item 一粒子以速度 $\\vel$ 進入磁場 $B$。The magnetic force is\n  \\begin{align}\n    F &= qvB \\sin\\theta \\\\\n      &= (1.6\\times10^{-19})(2.0\\times10^{6})(0.50)\\sin 90^\\circ \\nonumber \\\\\n      &= \\SI{1.6e-13}{\\newton}\n  \\end{align}\n\\end{enumerate}\n\n\\section{Data}\nTable~\\ref{tab:data} shows the results of an experiment.\n\n\\begin{table}[h]\n\\centering\n\\caption{Current through a filament lamp 燈泡電流}\n\\label{tab:data}\n\\begin{tabular}{c|cc}\n\\toprule\n$V$ / \\si{\\volt} & $I$ / \\si{\\ampere} & $R$ / \\si{\\ohm} \\\\\n\\midrule\n1.0 & 0.20 & 5.0 \\\\\n2.0 & 0.33 & 6.1 \\\\\n3.0 & 0.42 & 7.1 \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n\n\\begin{figure}[h]\n\\centering\n\\begin{tikzpicture}[>=Stealth]\n  \\draw[->] (0,0) -- (4,0) node[right] {$V$};\n  \\draw[->] (0,0) -- (0,3) node[above] {$I$};\n  \\draw[thick, blue] (0,0) .. controls (1.5,2) and (2.5,2.5) .. (3.8,2.7);\n\\end{tikzpicture}\n\\caption{$I$--$V$ graph of a filament lamp.}\n\\end{figure}\n\n\\noindent Name: \\underline{\\hspace{5cm}} \\hfill Class: \\underline{\\hspace{2cm}}\n\n\\end{document}\n";
+})();
+</script>
+</body>
+</html>
