@@ -185,9 +185,9 @@
   .doc .rule { display: inline-block; background: currentColor; }
   .doc .ig { vertical-align: bottom; }
   .doc .missing { display: inline-block; border: 1px dashed #c62828; color: #c62828; padding: .3em .7em; font: .8rem system-ui, sans-serif; border-radius: 4px; text-indent: 0; }
-  .doc .tikz { display: inline-block; vertical-align: middle; text-indent: 0; text-align: left; line-height: 1; }
-  .doc .tikz svg { display: block; overflow: visible; }
-  .doc .tikz.tz-in { vertical-align: baseline; }
+  .doc .tzbox { display: inline-block; vertical-align: middle; text-indent: 0; text-align: left; line-height: 1; }
+  .doc .tzbox svg { display: block; overflow: visible; }
+  .doc .tzbox.tz-in { vertical-align: baseline; }
   .doc .tz-wait { display: inline-block; font: .75rem system-ui, sans-serif; color: #888; border: 1px dashed #bbb; padding: 1.4em 1.8em; border-radius: 6px; }
   .doc .tz-err { display: inline-block; font: .75rem system-ui, sans-serif; color: #c62828; border: 1px dashed #c62828; padding: .8em 1em; border-radius: 6px; max-width: 30em; white-space: normal; }
   .doc .rsz { display: inline-block; }
@@ -1699,7 +1699,7 @@ class Conv {
     const cjk = /[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(src);
     if (cjk) this.warn('Chinese characters inside a TikZ diagram cannot be drawn (the diagram engine has no Chinese fonts)', 'tikzcjk');
     this.tikz.push({ src });
-    return `<div class="tikz${inline ? ' tz-in' : ''}" data-i="${idx}"><span class="tz-wait">Drawing diagram\u2026</span></div>`;
+    return `<div class="tzbox${inline ? ' tz-in' : ''}" data-i="${idx}"><span class="tz-wait">Drawing diagram\u2026</span></div>`;
   }
 
   /* ---------- environments ---------- */
@@ -2434,10 +2434,10 @@ function runTikz(job) {
     let done = false;
     const finish = (ok, val) => { if (done) return; done = true; obs.disconnect(); clearTimeout(t); box.remove(); ok ? resolve(val) : reject(val); };
     const check = () => {
+      if (box.querySelector('.tikzjax-broken-wrapper, .tikzjax-broken-image')) { finish(false, new Error('TeX could not draw this diagram — check its code')); return true; }
+      if (box.querySelector('.tikzjax-loading, .tikzjax-loader, script[type="text/tikz"]')) return false;
       const svg = box.querySelector('svg');
-      if (svg && svg.querySelector('path, text, g, use, line, rect, circle, polyline, polygon')) { finish(true, svg.outerHTML); return true; }
-      const err = box.querySelector('img, .tikzjax-error, [data-tikzjax-error]');
-      if (err && !box.querySelector('script[type="text/tikz"]')) { finish(false, new Error('TeX could not draw this diagram')); return true; }
+      if (svg) { svg.removeAttribute('class'); svg.style.color = '#000'; finish(true, svg.outerHTML); return true; }
       return false;
     };
     const obs = new MutationObserver(() => check());
@@ -2449,7 +2449,7 @@ function runTikz(job) {
   return p;
 }
 function renderTikz(doc, r, P, seq) {
-  const els = [...doc.querySelectorAll('.tikz[data-i]')];
+  const els = [...doc.querySelectorAll('.tzbox[data-i]')];
   $('tzMsg').textContent = '';
   if (!els.length) { updateTzStatus(); return; }
   if (r.tikz.some(t => /\\begin\{axis\}/.test(t.src))) {
@@ -2462,10 +2462,10 @@ function renderTikz(doc, r, P, seq) {
     if (TZ.cache.has(job.key)) { el.innerHTML = TZ.cache.get(job.key); return; }
     el.classList.add('tz-pending');
     runTikz(job).then(svg => {
-      document.querySelectorAll(`#doc .tikz[data-key="${job.key}"]`).forEach(e => { e.innerHTML = svg; e.classList.remove('tz-pending'); });
+      document.querySelectorAll(`#doc .tzbox[data-key="${job.key}"]`).forEach(e => { e.innerHTML = svg; e.classList.remove('tz-pending'); });
       updateTzStatus();
     }, err => {
-      document.querySelectorAll(`#doc .tikz[data-key="${job.key}"]`).forEach(e => {
+      document.querySelectorAll(`#doc .tzbox[data-key="${job.key}"]`).forEach(e => {
         e.classList.remove('tz-pending');
         e.innerHTML = `<span class="tz-err">Diagram not drawn: ${escH(TZ.failed ? 'the diagram engine could not be downloaded (check your internet connection)' : err.message)}.</span>`;
       });
@@ -2475,15 +2475,15 @@ function renderTikz(doc, r, P, seq) {
   updateTzStatus();
 }
 function updateTzStatus() {
-  const all = document.querySelectorAll('#doc .tikz').length;
-  const pend = document.querySelectorAll('#doc .tikz.tz-pending').length;
+  const all = document.querySelectorAll('#doc .tzbox').length;
+  const pend = document.querySelectorAll('#doc .tzbox.tz-pending').length;
   const base = $('prevSt').textContent.replace(/ · Drawing.*$| · \d+ diagrams?$/, '');
   $('prevSt').textContent = base + (pend ? ` · Drawing diagrams… ${all - pend}/${all}` : '');
 }
 
 /* ---------------- print ---------------- */
 $('pdfBtn').addEventListener('click', () => {
-  const pend = document.querySelectorAll('#doc .tikz.tz-pending').length;
+  const pend = document.querySelectorAll('#doc .tzbox.tz-pending').length;
   if (pend && !confirm(`${pend} diagram${pend > 1 ? 's are' : ' is'} still being drawn. Save the PDF anyway?`)) return;
   const L = state.layout; const P = state.result ? state.result.P : {};
   if (!L) return;
